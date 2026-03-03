@@ -1,35 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
-
-const API_BASE_URL = "http://localhost:8000/api";
+import { userService, User } from "@/api/userService";
+import { examService, Exam } from "@/api/examService";
 
 export interface ExamResult {
   score: number;
   status: string;
   counts_for_score: boolean;
   total_user_score: number;
-}
-
-export interface Exam {
-  id: number;
-  name: string;
-  description: string;
-  is_active: boolean;
-  status: "pending" | "completed";
-}
-
-export interface Rank {
-  id: number;
-  name: string;
-  description: string;
-  badge_image: string | null;
-}
-
-export interface User {
-  id: number;
-  username: string;
-  dni: string;
-  total_score: number;
-  current_rank: Rank | null;
 }
 
 interface AppState {
@@ -62,14 +39,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchExams = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/exams/`, {
-        headers: {
-          'Authorization': `Basic ${btoa(`${user?.username}:${user?.dni}`)}`,
-        },
-      });
+      const response = await examService.getExams();
       if (response.ok) {
         const data = await response.json();
-        // For simplicity in the UI, we'll map fields
         setExams(data);
       }
     } catch (error) {
@@ -80,11 +52,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const fetchUserScore = async () => {
     if (!user) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/users/score/${user.id}/`, {
-        headers: {
-          'Authorization': `Basic ${btoa(`${user.username}:${user.dni}`)}`,
-        },
-      });
+      const response = await userService.getUserScore(user.id);
       if (response.ok) {
         const data = await response.json();
         setUser(data);
@@ -98,12 +66,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const login = async (username: string, dni: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/users/login/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, dni }),
-      });
-      
+      const response = await userService.login(username, dni);
+
       if (response.ok) {
         const data = await response.json();
         setUser(data);

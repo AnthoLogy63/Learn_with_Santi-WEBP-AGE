@@ -28,9 +28,8 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md animate-fade-in">
-        {/* Logo / Brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#001c4d] text-white text-2xl font-bold mb-4 shadow-lg">
             MB
           </div>
           <h1 className="text-2xl font-bold text-foreground">Mi Bonito</h1>
@@ -83,7 +82,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 rounded-lg bg-accent text-accent-foreground font-semibold text-sm hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
+              className="w-full py-2.5 rounded-lg bg-[#001c4d] text-white font-semibold text-sm hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 shadow-md"
             >
               {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
             </button>

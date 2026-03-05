@@ -4,14 +4,7 @@ import { useAppContext } from "@/context/AppContext";
 import ExamCard from "@/components/user/ExamCard";
 
 const Dashboard = () => {
-  const { isAuthenticated, exams } = useAppContext();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isAuthenticated) navigate("/", { replace: true });
-  }, [isAuthenticated, navigate]);
-
-  if (!isAuthenticated) return null;
+  const { exams } = useAppContext();
 
   return (
     <div className="max-w-5xl mx-auto px-6 lg:px-8 py-10 lg:py-12">

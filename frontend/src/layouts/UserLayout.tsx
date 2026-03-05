@@ -1,10 +1,24 @@
-import React from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useNavigate } from "react-router-dom";
+import { useAppContext } from "@/context/AppContext";
 import UserProfile from "@/components/user/UserProfile";
 import Logo from "@/media/logo.webp";
 import FondoCaja from "@/media/FondoCaja.webp";
 
 const UserLayout = () => {
+    const { isAuthenticated, user } = useAppContext();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate("/", { replace: true });
+        } else if (user && user.is_staff) {
+            navigate("/admin", { replace: true });
+        }
+    }, [isAuthenticated, user, navigate]);
+
+    if (!isAuthenticated || (user && user.is_staff)) return null;
+
     return (
         <div className="flex flex-col lg:flex-row min-h-screen lg:h-screen bg-[#001c4d] lg:overflow-hidden text-white font-inter"
             style={{
@@ -27,7 +41,6 @@ const UserLayout = () => {
                 </div>
             </aside>
 
-            {/* Main Content Area */}
             <main className="flex-1 lg:overflow-y-auto bg-black/10 backdrop-blur-[2px]">
                 <Outlet />
             </main>

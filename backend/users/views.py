@@ -16,7 +16,7 @@ class LoginView(APIView):
         if not username or not dni:
             return Response({'error': 'Username and DNI are required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # In this platform, DNI is the password
+        # In this platform, the provided DNI is used as the password
         user = authenticate(request, username=username, password=dni)
         
         if user:
@@ -24,21 +24,7 @@ class LoginView(APIView):
             serializer = UserSerializer(user)
             return Response(serializer.data)
         else:
-            # Check if user exists but password (dni) is wrong, 
-            # or try to find user by username and check dni field directly if not using it as password
-            try:
-                user_obj = User.objects.get(username=username)
-                if user_obj.dni == dni:
-                    # Sync password with DNI so Basic Auth works in subsequent calls
-                    user_obj.set_password(dni)
-                    user_obj.save()
-                    login(request, user_obj)
-                    serializer = UserSerializer(user_obj)
-                    return Response(serializer.data)
-            except User.DoesNotExist:
-                pass
-                
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Credenciales inválidas'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class UserScoreView(APIView):
     permission_classes = [IsAuthenticated]

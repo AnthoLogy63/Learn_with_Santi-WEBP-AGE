@@ -16,7 +16,7 @@ class Rank(models.Model):
 
 
 class User(AbstractUser):
-    dni = models.CharField(max_length=20, unique=True)
+    dni = models.CharField(max_length=20, default="")
     total_score = models.IntegerField(default=0)
     current_rank = models.ForeignKey(Rank, on_delete=models.SET_NULL, null=True, blank=True)
 

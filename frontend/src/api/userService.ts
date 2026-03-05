@@ -13,6 +13,7 @@ export interface User {
     dni: string;
     total_score: number;
     current_rank: Rank | null;
+    is_staff: boolean;
 }
 
 export const userService = {

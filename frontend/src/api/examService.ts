@@ -5,12 +5,24 @@ export interface Exam {
     name: string;
     description: string;
     is_active: boolean;
+    is_enabled: boolean;
     status: "pending" | "completed";
+    last_score?: number;
 }
 
 export const examService = {
     getExams: async () => {
         return apiClient("/exams/");
+    },
+
+    toggleEnabled: async (examId: number) => {
+        return apiClient(`/exams/${examId}/toggle_enabled/`, {
+            method: 'POST',
+        });
+    },
+
+    getStatsSummary: async () => {
+        return apiClient("/exams/stats_summary/");
     },
 
     getQuestions: async (examId: string) => {
@@ -23,5 +35,9 @@ export const examService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ answers }),
         });
+    },
+
+    getUserResults: async () => {
+        return apiClient("/exams/attempts/user_results/");
     },
 };

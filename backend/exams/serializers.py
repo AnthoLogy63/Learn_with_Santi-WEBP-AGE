@@ -1,18 +1,26 @@
 from rest_framework import serializers
-from .models import Exam, Question, Attempt, AttemptQuestion, AttemptAnswer
+from .models import Exam, Question, Option, Attempt, AttemptQuestion, AttemptAnswer
+
+class OptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Option
+        fields = ['id', 'text']
 
 class QuestionSerializer(serializers.ModelSerializer):
+    options = OptionSerializer(many=True, read_only=True)
+
     class Meta:
         model = Question
-        fields = ['id', 'text', 'image', 'option_a', 'option_b', 'option_c', 'option_d', 'points', 'time_limit_seconds']
+        fields = ['id', 'text', 'image', 'options', 'points', 'time_limit_seconds', 'question_type']
 
 class ExamSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     last_score = serializers.SerializerMethodField()
+    attempts_left = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
-        fields = ['id', 'name', 'description', 'bank_total_questions', 'questions_per_attempt', 'max_scored_attempts', 'max_points', 'is_active', 'status', 'last_score']
+        fields = ['id', 'name', 'description', 'bank_total_questions', 'questions_per_attempt', 'max_scored_attempts', 'max_points', 'is_active', 'is_enabled', 'status', 'last_score', 'attempts_left']
 
     def get_status(self, obj):
         user = self.context['request'].user
@@ -22,15 +30,26 @@ class ExamSerializer(serializers.ModelSerializer):
 
     def get_last_score(self, obj):
         user = self.context['request'].user
-        last_attempt = Attempt.objects.filter(user=user, exam=obj, status='completed').order_by('-completed_at').first()
-        if last_attempt:
-            return last_attempt.score_obtained
+        # Best of the first 3 attempts
+        best_attempt = Attempt.objects.filter(
+            user=user, 
+            exam=obj, 
+            status='completed',
+            counts_for_score=True
+        ).order_by('-score_obtained').first()
+        if best_attempt:
+            return best_attempt.score_obtained
         return None
+    
+    def get_attempts_left(self, obj):
+        user = self.context['request'].user
+        attempts_count = Attempt.objects.filter(user=user, exam=obj).count()
+        return max(0, obj.max_scored_attempts - attempts_count)
 
 class AttemptAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttemptAnswer
-        fields = ['question', 'selected_option', 'is_correct', 'points_obtained', 'answered_at']
+        fields = ['question', 'selected_option', 'selected_options', 'text_response', 'is_correct', 'points_obtained', 'answered_at']
         read_only_fields = ['is_correct', 'points_obtained', 'answered_at']
 
 class AttemptSerializer(serializers.ModelSerializer):

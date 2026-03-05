@@ -9,6 +9,8 @@ import Dashboard from "./pages/user/Dashboard";
 import ExamPage from "./pages/user/ExamPage";
 import NotFound from "./pages/NotFound";
 import UserLayout from "./layouts/UserLayout";
+import AdminLayout from "./layouts/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +28,11 @@ const App = () => (
             {/* Student/User Routes inside UserLayout */}
             <Route element={<UserLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
+
+            {/* Admin Routes */}
+            <Route element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminDashboard />} />
             </Route>
 
             {/* Full screen pages like ExamPage */}

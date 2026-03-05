@@ -11,5 +11,5 @@ class UserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'dni', 'total_score', 'current_rank']
-        read_only_fields = ['total_score', 'current_rank']
+        fields = ['id', 'username', 'dni', 'is_staff', 'total_score', 'current_rank']
+        read_only_fields = ['total_score', 'current_rank', 'is_staff']

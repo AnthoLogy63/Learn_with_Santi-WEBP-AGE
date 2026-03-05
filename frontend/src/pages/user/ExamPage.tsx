@@ -5,16 +5,19 @@ import { useAppContext } from "@/context/AppContext";
 import { examService } from "@/api/examService";
 import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Loader2 } from "lucide-react";
 
+interface Option {
+  id: number;
+  text: string;
+}
+
 interface Question {
   id: number;
   text: string;
   image: string | null;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
+  options: Option[];
   points: number;
   time_limit_seconds: number;
+  question_type: 'single_choice' | 'multiple_choice' | 'open_ended';
 }
 
 const ExamPage = () => {
@@ -25,7 +28,7 @@ const ExamPage = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState<any>(null);
@@ -77,18 +80,37 @@ const ExamPage = () => {
 
   const currentQuestion = questions[currentIndex];
 
-  const handleAnswer = (optionKey: string) => {
-    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: optionKey }));
+  const handleAnswer = (val: any) => {
+    if (currentQuestion.question_type === 'multiple_choice') {
+      const current = (answers[currentQuestion.id] || []) as number[];
+      if (current.includes(val)) {
+        setAnswers(prev => ({ ...prev, [currentQuestion.id]: current.filter(id => id !== val) }));
+      } else {
+        setAnswers(prev => ({ ...prev, [currentQuestion.id]: [...current, val] }));
+      }
+    } else {
+      setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }));
+    }
   };
 
   const handleFinish = async () => {
     if (!attemptId) return;
     setIsSubmitting(true);
 
-    const formattedAnswers = Object.entries(answers).map(([qId, option]) => ({
-      question_id: parseInt(qId),
-      selected_option: option
-    }));
+    const formattedAnswers = Object.entries(answers).map(([qId, val]) => {
+      const qNum = parseInt(qId);
+      const question = questions.find(q => q.id === qNum);
+
+      const payload: any = { question_id: qNum };
+      if (question?.question_type === 'multiple_choice') {
+        payload.selected_option_ids = val;
+      } else if (question?.question_type === 'open_ended') {
+        payload.text_response = val;
+      } else {
+        payload.selected_option_id = val;
+      }
+      return payload;
+    });
 
     try {
       const response = await examService.submitAnswers(attemptId, formattedAnswers);
@@ -98,9 +120,14 @@ const ExamPage = () => {
         setResults(data);
         setShowResults(true);
         fetchUserScore(); // Update points in context
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Submission failed:", errorData);
+        alert("Error al finalizar la evaluación. Por favor intente de nuevo.");
       }
     } catch (error) {
       console.error("Error submitting answers:", error);
+      alert("Error de conexión al finalizar la evaluación.");
     } finally {
       setIsSubmitting(false);
     }
@@ -115,19 +142,36 @@ const ExamPage = () => {
           <div className="w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-6 border border-emerald-500/30">
             <CheckCircle2 className="h-10 w-10" />
           </div>
-          <h2 className="text-3xl font-black text-white mb-2">¡Intento finalizado!</h2>
+          <h2 className="text-3xl font-black text-white mb-2">¡Evaluación Finalizada!</h2>
           <p className="text-white/60 mb-8 font-medium">
-            {results?.counts_for_score ? "Este intento sumó puntos a tu perfil." : "Límite de intentos puntuables alcanzado."}
+            {results?.counts_for_score
+              ? "Este intento sumó puntos a tu perfil."
+              : "Límite de intentos puntuables alcanzado. Este intento es informativo."}
           </p>
 
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
-              <p className="text-3xl font-black text-amber-400">{results?.score}</p>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-white/40 mt-1">Puntaje obtenido</p>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10">
+              <p className="text-2xl font-black text-amber-400">{results?.score}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-white/40 mt-1">Puntaje</p>
             </div>
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
-              <p className="text-3xl font-black text-white">{results?.total_user_score}</p>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-white/40 mt-1">Tu puntaje total</p>
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10">
+              <p className="text-2xl font-black text-white">
+                {results?.correct_count} / {results?.total_questions}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-white/40 mt-1">Correctas</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+              <span className="text-xs font-bold text-white/60 uppercase tracking-wider">Tu puntaje total:</span>
+              <span className="text-lg font-black text-white">{results?.total_user_score} pts</span>
+            </div>
+            <div className={`flex items-center justify-between p-4 rounded-xl border ${results?.attempts_left > 0 ? "bg-amber-400/10 border-amber-400/20" : "bg-white/5 border-white/10"}`}>
+              <span className="text-xs font-bold text-white/60 uppercase tracking-wider">Intentos puntuables restantes:</span>
+              <span className={`text-lg font-black ${results?.attempts_left > 0 ? "text-amber-400" : "text-white/40"}`}>
+                {results?.attempts_left}
+              </span>
             </div>
           </div>
 
@@ -136,7 +180,7 @@ const ExamPage = () => {
               onClick={() => navigate("/dashboard")}
               className="flex-1 py-4 rounded-xl border border-white/10 text-sm font-bold text-white hover:bg-white/10 transition-colors"
             >
-              Volver al dashboard
+              Cerrar
             </button>
             <button
               onClick={() => window.location.reload()}
@@ -192,30 +236,42 @@ const ExamPage = () => {
             {currentQuestion.text}
           </h2>
 
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            {['a', 'b', 'c', 'd'].map((key) => {
-              const optionText = (currentQuestion as any)[`option_${key}`];
-              const isSelected = answers[currentQuestion.id] === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => handleAnswer(key)}
-                  className={`group w-full text-left p-6 rounded-2xl border transition-all duration-300 ${isSelected
-                    ? "border-amber-400 bg-amber-400/20 text-white shadow-lg ring-1 ring-amber-400/50"
-                    : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-white/20"
-                    }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm font-black transition-colors ${isSelected ? "bg-amber-400 text-black" : "bg-white/10 text-white"
-                      }`}>
-                      {key.toUpperCase()}
-                    </span>
-                    <span className="text-base font-bold leading-tight group-hover:text-white transition-colors">{optionText}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {currentQuestion.question_type === 'open_ended' ? (
+            <textarea
+              value={answers[currentQuestion.id] || ""}
+              onChange={(e) => handleAnswer(e.target.value)}
+              placeholder="Escribe tu respuesta aquí..."
+              className="w-full h-40 p-6 rounded-2xl bg-white/5 border border-white/10 text-white focus:border-amber-400 focus:outline-none transition-all placeholder:text-white/20 font-medium"
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
+              {currentQuestion.options.map((option, index) => {
+                const letter = String.fromCharCode(65 + index);
+                const isSelected = currentQuestion.question_type === 'multiple_choice'
+                  ? (answers[currentQuestion.id] || []).includes(option.id)
+                  : answers[currentQuestion.id] === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => handleAnswer(option.id)}
+                    className={`group w-full text-left p-6 rounded-2xl border transition-all duration-300 ${isSelected
+                      ? "border-amber-400 bg-amber-400/20 text-white shadow-lg ring-1 ring-amber-400/50"
+                      : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-white/20"
+                      }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black transition-colors ${isSelected ? "bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.5)]" : "bg-white/10 text-white"
+                        }`}>
+                        {currentQuestion.question_type === 'multiple_choice' && isSelected ? "✓" : letter}
+                      </div>
+                      <span className="text-base font-bold leading-tight group-hover:text-white transition-colors">{option.text}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Navigation */}

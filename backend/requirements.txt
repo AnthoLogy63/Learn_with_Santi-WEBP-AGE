@@ -2,8 +2,14 @@ asgiref==3.11.1
 charset-normalizer==3.4.4
 Django==5.2.11
 django-cors-headers==4.9.0
+django-filter==25.1
 djangorestframework==3.16.1
+dj-database-url==2.3.0
+gunicorn==23.0.0
 pillow==12.1.1
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
 reportlab==4.4.10
 sqlparse==0.5.5
 tzdata==2025.3
+whitenoise==6.9.0

@@ -60,7 +60,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database — uses PostgreSQL in production via URL, and local PostgreSQL in dev
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://learn_with_santi_bd_user:fyj9arOEOVWwtaLzg8qGw9msXjnPCDek@dpg-d6lh9mua2pns73ep5kgg-a/learn_with_santi_bd')
 
 if DATABASE_URL:
     import dj_database_url
@@ -68,15 +68,11 @@ if DATABASE_URL:
         'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
     }
 else:
-    # Dummy credentials para generar SQL de Postgres
+    # Configuración temporal para extraer esquema
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'LearnWithSanti',
-            'USER': 'admin',
-            'PASSWORD': '913397',
-            'HOST': 'localhost',
-            'PORT': '5433',
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 

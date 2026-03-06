@@ -5,7 +5,7 @@ import { Lock, User } from "lucide-react";
 import Logo from "@/media/logo.webp";
 import Santigif from "@/media/santi.gif";
 import FondoCaja from "@/media/FondoCaja.webp";
-import LogoCaja from "@/media/logocaja.gif";
+import LogoCaja from "@/media/LogoCaja.gif";
 
 const Login = () => {
   const [username, setUsername] = useState("");

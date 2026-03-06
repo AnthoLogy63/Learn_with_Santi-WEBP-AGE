@@ -1,5 +1,4 @@
 import { useAppContext } from "@/context/AppContext";
-import Foto from "@/media/foto.jpg";
 import { LogOut, ClipboardList, BarChart3, Edit3 } from "lucide-react";
 
 interface AdminProfileProps {
@@ -14,6 +13,18 @@ const AdminProfile = ({ activeTab, setActiveTab }: AdminProfileProps) => {
 
     const initials = user.username.slice(0, 2).toUpperCase();
 
+    // Generate deterministic color from username
+    const hash = user.username.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const palette = [
+        ['#001c4d', '#3b82f6'], // navy/blue
+        ['#065f46', '#10b981'], // green
+        ['#7c3aed', '#a78bfa'], // purple
+        ['#b45309', '#fbbf24'], // amber
+        ['#9f1239', '#f43f5e'], // rose
+        ['#0369a1', '#38bdf8'], // sky
+    ];
+    const [bgColor, textColor] = palette[hash % palette.length];
+
     const navItems = [
         { id: 'management', label: 'Probar Exámenes', icon: ClipboardList },
         { id: 'results', label: 'Ver Resultados', icon: BarChart3 },
@@ -24,22 +35,11 @@ const AdminProfile = ({ activeTab, setActiveTab }: AdminProfileProps) => {
         <div className="animate-slide-in flex flex-col h-full">
             {/* Avatar */}
             <div className="flex flex-col items-center text-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-slate-200 border-2 border-white text-[#001c4d] flex items-center justify-center text-2xl font-bold mb-3 relative overflow-hidden shadow-xl">
-                    {user.current_rank?.badge_image ? (
-                        <img
-                            src={user.current_rank.badge_image}
-                            alt={user.current_rank.name}
-                            className="w-full h-full object-cover"
-                        />
-                    ) : Foto ? (
-                        <img
-                            src={Foto}
-                            alt="Perfil"
-                            className="w-full h-full object-cover"
-                        />
-                    ) : (
-                        initials
-                    )}
+                <div
+                    className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-black mb-3 relative shadow-xl select-none"
+                    style={{ backgroundColor: bgColor, color: textColor }}
+                >
+                    {initials}
                 </div>
 
                 <div className="bg-[#001c4d] px-4 py-1 rounded-full mb-2 shadow-md">

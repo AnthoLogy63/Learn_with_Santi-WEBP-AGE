@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { examService, Exam } from "@/api/examService";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye } from "lucide-react";
 import { toast } from "sonner";
+import AdminExamPreview from "@/components/admin/AdminExamPreview";
 
 const ExamManagement = () => {
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
+    const [previewExam, setPreviewExam] = useState<Exam | null>(null);
 
     const fetchAllExams = async () => {
         try {
@@ -49,50 +51,71 @@ const ExamManagement = () => {
     }
 
     return (
-        <div className="space-y-8 p-2 md:p-0">
-            <header className="mb-10">
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-3 drop-shadow-lg">
-                    Gestión de Exámenes
-                </h1>
-                <p className="text-base md:text-lg lg:text-xl text-white/80 max-w-2xl leading-relaxed">
-                    Habilita o deshabilita las evaluaciones para los usuarios.
-                </p>
-            </header>
-
-            <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {exams.map((exam) => (
-                    <div key={exam.id} className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-xl flex flex-col justify-between hover:scale-[1.02] transition-all">
-                        <div>
-                            <div className="flex justify-between items-start mb-4">
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${exam.is_enabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
-                                    {exam.is_enabled ? 'Habilitado' : 'Deshabilitado'}
-                                </span>
-                            </div>
-                            <h3 className="text-xl font-bold text-white mb-2">{exam.name}</h3>
-                            <p className="text-white/60 text-sm line-clamp-2 mb-6">{exam.description || 'Sin descripción disponible.'}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                            <span className="text-[10px] md:text-xs font-bold text-white/40 uppercase tracking-widest">Estado de visibilidad</span>
-
-                            {/* Toggle Switch */}
-                            <button
-                                onClick={() => handleToggle(exam.id)}
-                                className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#001c4d] ${exam.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
-                            >
-                                <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${exam.is_enabled ? 'translate-x-8' : 'translate-x-1'}`} />
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {exams.length === 0 && (
-                <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
-                    <p className="text-white/40 font-medium text-sm">No hay exámenes registrados en el sistema.</p>
-                </div>
+        <>
+            {/* Vista previa modal (overlay de pantalla completa) */}
+            {previewExam && (
+                <AdminExamPreview
+                    examId={previewExam.id}
+                    examName={previewExam.name}
+                    onClose={() => setPreviewExam(null)}
+                />
             )}
-        </div>
+
+            <div className="space-y-8 p-2 md:p-0">
+                <header className="mb-10">
+                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-3 drop-shadow-lg">
+                        Gestión de Exámenes
+                    </h1>
+                    <p className="text-base md:text-lg lg:text-xl text-white/80 max-w-2xl leading-relaxed">
+                        Habilita o deshabilita las evaluaciones. Usa <strong>Vista previa</strong> para revisar el contenido como lo verían los usuarios.
+                    </p>
+                </header>
+
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    {exams.map((exam) => (
+                        <div key={exam.id} className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-xl flex flex-col justify-between hover:scale-[1.02] transition-all">
+                            <div>
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${exam.is_enabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                        {exam.is_enabled ? 'Habilitado' : 'Deshabilitado'}
+                                    </span>
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">{exam.name}</h3>
+                                <p className="text-white/60 text-sm line-clamp-2 mb-6">{exam.description || 'Sin descripción disponible.'}</p>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* Botón vista previa */}
+                                <button
+                                    onClick={() => setPreviewExam(exam)}
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-black uppercase tracking-widest hover:bg-indigo-500/30 hover:text-indigo-200 transition-all"
+                                >
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Vista previa
+                                </button>
+
+                                {/* Toggle habilitado */}
+                                <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                                    <span className="text-[10px] md:text-xs font-bold text-white/40 uppercase tracking-widest">Estado de visibilidad</span>
+                                    <button
+                                        onClick={() => handleToggle(exam.id)}
+                                        className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#001c4d] ${exam.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                                    >
+                                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${exam.is_enabled ? 'translate-x-8' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {exams.length === 0 && (
+                    <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
+                        <p className="text-white/40 font-medium text-sm">No hay exámenes registrados en el sistema.</p>
+                    </div>
+                )}
+            </div>
+        </>
     );
 };
 

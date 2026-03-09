@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import { apiClient, getAuthHeader } from "./apiClient";
 
 export interface Exam {
     id: number;
@@ -8,6 +8,15 @@ export interface Exam {
     is_enabled: boolean;
     status: "pending" | "completed";
     last_score?: number;
+}
+
+export interface ExamImportResult {
+    modo: "creado" | "reemplazado";
+    exam_id: number;
+    exam_name: string;
+    preguntas_creadas: number;
+    opciones_creadas: number;
+    errores: string[];
 }
 
 export const examService = {
@@ -44,4 +53,16 @@ export const examService = {
     exportResults: async (examId: number) => {
         return apiClient(`/exams/${examId}/export_csv/`);
     },
+
+    importExam: async (file: File) => {
+        const form = new FormData();
+        form.append('file', file);
+        return fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/exams/import/`, {
+            method: 'POST',
+            headers: { ...getAuthHeader() },
+            body: form,
+        });
+    },
 };
+
+

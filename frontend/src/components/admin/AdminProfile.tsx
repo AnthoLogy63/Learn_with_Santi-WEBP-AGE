@@ -1,5 +1,5 @@
 import { useAppContext } from "@/context/AppContext";
-import { LogOut, ClipboardList, BarChart3, Edit3 } from "lucide-react";
+import { LogOut, ClipboardList, BarChart3, Edit3, DatabaseZap } from "lucide-react";
 
 interface AdminProfileProps {
     activeTab: string;
@@ -28,6 +28,7 @@ const AdminProfile = ({ activeTab, setActiveTab }: AdminProfileProps) => {
     const navItems = [
         { id: 'management', label: 'Probar Exámenes', icon: ClipboardList },
         { id: 'results', label: 'Ver Resultados', icon: BarChart3 },
+        { id: 'data', label: 'Importar / Exportar', icon: DatabaseZap },
         { id: 'edit', label: 'Editar Evaluaciones', icon: Edit3, placeholder: true },
     ];
 

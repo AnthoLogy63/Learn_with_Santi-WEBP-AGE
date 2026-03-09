@@ -9,9 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = True
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost 127.0.0.1 .onrender.com').split(' ')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # Application definition
 INSTALLED_APPS = [
@@ -59,29 +59,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database — uses PostgreSQL in production via URL, and local PostgreSQL in dev
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://learn_with_santi_bd_user:fyj9arOEOVWwtaLzg8qGw9msXjnPCDek@dpg-d6lh9mua2pns73ep5kgg-a/learn_with_santi_bd')
-
-if DATABASE_URL:
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
+# Database config changed to local PostgreSQL
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'LearnWithSanti',
+        'USER': 'postgres',
+        'PASSWORD': '913397', 
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
-else:
-    # Configuración temporal para extraer esquema
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
-    'https://learn-with-santi-webp-dgftzgpnv-anthonys-projects-86a774cf.vercel.app',
-    'https://learn-with-santi-webp-age.vercel.app',
-] + [origin for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin]
+    'http://localhost:5173',
+    'http://localhost:3000',
+]
 
 
 # Password validation

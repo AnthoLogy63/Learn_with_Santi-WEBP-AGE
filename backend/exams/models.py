@@ -11,6 +11,7 @@ class Exam(models.Model):
     max_points = models.IntegerField(default=100)
     is_active = models.BooleanField(default=True)
     is_enabled = models.BooleanField(default=True)
+    is_timed = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

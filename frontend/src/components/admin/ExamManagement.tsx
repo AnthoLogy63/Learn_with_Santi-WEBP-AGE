@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { examService, Exam } from "@/api/examService";
-import { Loader2, Eye } from "lucide-react";
+import { Loader2, Edit3, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import AdminExamPreview from "@/components/admin/AdminExamPreview";
+import ExamEditor from "@/components/admin/ExamEditor";
 
 const ExamManagement = () => {
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
-    const [previewExam, setPreviewExam] = useState<Exam | null>(null);
+    const [editingExamId, setEditingExamId] = useState<number | null>(null);
 
     const fetchAllExams = async () => {
         try {
@@ -41,6 +41,42 @@ const ExamManagement = () => {
         }
     };
 
+    const handleCreateExam = async () => {
+        try {
+            const response = await examService.createExam({
+                name: "Nueva Evaluación",
+                description: "Descripción de la evaluación.",
+                is_timed: true
+            });
+            if (response.ok) {
+                const newExam = await response.json();
+                setExams([newExam, ...exams]);
+                setEditingExamId(newExam.id);
+                toast.success("Evaluación creada. Ahora puedes editarla.");
+            }
+        } catch (error) {
+            toast.error("Error al crear evaluación");
+        }
+    };
+
+
+    const handleDeleteExam = async (examId: number) => {
+        if (!confirm("¿Estás seguro de que deseas eliminar permanentemente esta evaluación y todas sus preguntas? Esta acción no se puede deshacer.")) return;
+
+        try {
+            const response = await examService.deleteExam(examId);
+            if (response.ok) {
+                setExams(exams.filter(e => e.id !== examId));
+                toast.success("Evaluación eliminada correctamente");
+            } else {
+                toast.error("Error al eliminar la evaluación");
+            }
+        } catch (error) {
+            toast.error("Error de conexión");
+        }
+    };
+
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
@@ -52,23 +88,35 @@ const ExamManagement = () => {
 
     return (
         <>
-            {/* Vista previa modal (overlay de pantalla completa) */}
-            {previewExam && (
-                <AdminExamPreview
-                    examId={previewExam.id}
-                    examName={previewExam.name}
-                    onClose={() => setPreviewExam(null)}
+            {/* Editor modal */}
+            {editingExamId && (
+                <ExamEditor
+                    examId={editingExamId}
+                    onClose={() => setEditingExamId(null)}
+                    onSaveSuccess={fetchAllExams}
                 />
             )}
 
             <div className="space-y-8 p-2 md:p-0">
-                <header className="mb-10">
-                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-3 drop-shadow-lg">
-                        Gestión de Exámenes
-                    </h1>
-                    <p className="text-base md:text-lg lg:text-xl text-white/80 max-w-2xl leading-relaxed">
-                        Habilita o deshabilita las evaluaciones. Usa <strong>Vista previa</strong> para revisar el contenido como lo verían los usuarios.
-                    </p>
+                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-3 drop-shadow-lg">
+                            Gestión de Exámenes
+                        </h1>
+                        <p className="text-base md:text-lg lg:text-xl text-white/80 max-w-2xl leading-relaxed">
+                            Crea, edita o importa evaluaciones. Controla la visibilidad y el tiempo para cada reto académico.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleCreateExam}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all"
+                        >
+                            <Plus size={16} />
+                            Nueva Evaluación
+                        </button>
+                    </div>
                 </header>
 
                 <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -79,20 +127,29 @@ const ExamManagement = () => {
                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${exam.is_enabled ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                                         {exam.is_enabled ? 'Habilitado' : 'Deshabilitado'}
                                     </span>
+                                    <button
+                                        onClick={() => handleDeleteExam(exam.id)}
+                                        className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                                        title="Eliminar Evaluación"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">{exam.name}</h3>
                                 <p className="text-white/60 text-sm line-clamp-2 mb-6">{exam.description || 'Sin descripción disponible.'}</p>
                             </div>
 
-                            <div className="space-y-3">
-                                {/* Botón vista previa */}
-                                <button
-                                    onClick={() => setPreviewExam(exam)}
-                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-black uppercase tracking-widest hover:bg-indigo-500/30 hover:text-indigo-200 transition-all"
-                                >
-                                    <Eye className="h-3.5 w-3.5" />
-                                    Vista previa
-                                </button>
+                            <div className="space-y-4">
+                                <div className="flex flex-col gap-3">
+                                    {/* Botón editar */}
+                                    <button
+                                        onClick={() => setEditingExamId(exam.id)}
+                                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-300 text-[10px] font-black uppercase tracking-widest hover:bg-orange-500/30 hover:text-orange-200 transition-all"
+                                    >
+                                        <Edit3 className="h-3.5 w-3.5" />
+                                        Editar Evaluación
+                                    </button>
+                                </div>
 
                                 {/* Toggle habilitado */}
                                 <div className="flex items-center justify-between pt-3 border-t border-white/10">

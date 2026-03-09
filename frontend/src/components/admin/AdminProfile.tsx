@@ -26,10 +26,9 @@ const AdminProfile = ({ activeTab, setActiveTab }: AdminProfileProps) => {
     const [bgColor, textColor] = palette[hash % palette.length];
 
     const navItems = [
-        { id: 'management', label: 'Probar Exámenes', icon: ClipboardList },
+        { id: 'management', label: 'Editar Evaluaciones', icon: Edit3 },
         { id: 'results', label: 'Ver Resultados', icon: BarChart3 },
         { id: 'data', label: 'Importar / Exportar', icon: DatabaseZap },
-        { id: 'edit', label: 'Editar Evaluaciones', icon: Edit3, placeholder: true },
     ];
 
     return (
@@ -57,17 +56,15 @@ const AdminProfile = ({ activeTab, setActiveTab }: AdminProfileProps) => {
                 {navItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => !item.placeholder && setActiveTab(item.id)}
+                        onClick={() => setActiveTab(item.id)}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-300 group shadow-sm ${activeTab === item.id
                             ? "bg-[#001c4d] border-[#001c4d] text-white"
                             : "bg-white border-slate-200 text-slate-600 hover:border-[#001c4d]/20 hover:bg-slate-50"
-                            } ${item.placeholder ? "opacity-60 cursor-not-allowed" : ""}`}
-                        disabled={item.placeholder}
+                            }`}
                     >
                         <item.icon className={`h-5 w-5 ${activeTab === item.id ? "text-white" : "text-slate-400 group-hover:text-[#001c4d]"}`} />
                         <div className="flex flex-col items-start leading-none">
                             <span className="text-sm font-black uppercase tracking-widest">{item.label}</span>
-                            {item.placeholder && <span className="text-[10px] font-bold mt-1 text-slate-500">Próximamente</span>}
                         </div>
                     </button>
                 ))}

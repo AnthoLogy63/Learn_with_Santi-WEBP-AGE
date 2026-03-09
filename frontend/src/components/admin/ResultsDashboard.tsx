@@ -17,7 +17,7 @@ const ResultsDashboard = () => {
     const [viewingExamDetail, setViewingExamDetail] = useState<{ examId: number, examName: string } | null>(null);
     const [selectedExam, setSelectedExam] = useState<any | null>(null);
 
-    const fetchData = async (reset = false) => {
+    const fetchData = async (reset = false, searchStr = search) => {
         if (reset) {
             setLoading(true);
             setOffset(0);
@@ -27,10 +27,7 @@ const ResultsDashboard = () => {
 
         try {
             const currentOffset = reset ? 0 : offset;
-            const [usersRes, statsRes] = await Promise.all([
-                examService.getUserResults(search, currentOffset),
-                reset ? examService.getStatsSummary() : Promise.resolve(null)
-            ]);
+            const usersRes = await examService.getUserResults(searchStr, currentOffset);
 
             if (usersRes.ok) {
                 const uData = await usersRes.json();
@@ -42,11 +39,6 @@ const ResultsDashboard = () => {
                 setHasMore(uData.has_more);
                 setOffset(currentOffset + 10);
             }
-
-            if (statsRes && statsRes.ok) {
-                const sData = await statsRes.json();
-                setStatsSummary(sData);
-            }
         } catch (error) {
             console.error("Error fetching analytics:", error);
             toast.error("Error al cargar los resultados");
@@ -56,8 +48,36 @@ const ResultsDashboard = () => {
         }
     };
 
+    const fetchStats = async () => {
+        try {
+            const statsRes = await examService.getStatsSummary();
+            if (statsRes && statsRes.ok) {
+                const sData = await statsRes.json();
+                setStatsSummary(sData);
+            }
+        } catch (error) {
+            console.error("Error fetching stats:", error);
+        }
+    };
+
+    // Initial load for stats AND users
     useEffect(() => {
-        fetchData(true);
+        fetchStats();
+        fetchData(true, "");
+    }, []);
+
+    // Debounced search for users ONLY
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (search !== "") {
+                fetchData(true);
+            } else {
+                // If search is cleared, fetch initial empty search
+                fetchData(true, "");
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
     }, [search]);
 
     const loadMore = () => {

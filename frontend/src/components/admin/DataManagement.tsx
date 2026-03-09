@@ -71,11 +71,11 @@ const EXPORT_ACTIONS: ImportAction[] = [
 
 // ─── Formato de columnas esperadas ──────────────────────────────────────────
 const FORMAT_COLUMNS = [
-    { col: "username", desc: "Nombre de usuario para iniciar sesión", required: true, example: "jperez" },
-    { col: "first_name", desc: "Nombre", required: true, example: "Juan" },
-    { col: "last_name", desc: "Apellido", required: true, example: "Pérez" },
-    { col: "dni", desc: "DNI (se usa como contraseña)", required: true, example: "12345678" },
-    { col: "is_staff", desc: "¿Es administrador? (TRUE / FALSE)", required: false, example: "FALSE" },
+    { col: "ASESOR ANALISTA", desc: "Nombre de usuario (Login)", required: true, example: "jperez" },
+    { col: "NUMERO DOCUMENTO", desc: "DNI (Password)", required: true, example: "12345678" },
+    { col: "NOMBRE", desc: "Nombre (Opcional)", required: false, example: "Juan" },
+    { col: "APELLIDO", desc: "Apellido (Opcional)", required: false, example: "Pérez" },
+    { col: "ES_ADMIN", desc: "¿Administrador? (TRUE/FALSE)", required: false, example: "FALSE" },
 ];
 
 const FORMAT_EXAM_COLUMNS = [

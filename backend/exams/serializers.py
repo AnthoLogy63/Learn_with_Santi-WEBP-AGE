@@ -4,14 +4,14 @@ from .models import Exam, Question, Option, Attempt, AttemptQuestion, AttemptAns
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
-        fields = ['id', 'text', 'is_correct']
+        fields = ['id', 'question', 'text', 'is_correct']
 
 class QuestionSerializer(serializers.ModelSerializer):
     options = OptionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Question
-        fields = ['id', 'text', 'image', 'options', 'points', 'time_limit_seconds', 'question_type']
+        fields = ['id', 'exam', 'text', 'image', 'options', 'points', 'time_limit_seconds', 'question_type']
 
 class ExamSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
@@ -20,7 +20,7 @@ class ExamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Exam
-        fields = ['id', 'name', 'description', 'bank_total_questions', 'questions_per_attempt', 'max_scored_attempts', 'max_points', 'is_active', 'is_enabled', 'status', 'last_score', 'attempts_left']
+        fields = ['id', 'name', 'description', 'bank_total_questions', 'questions_per_attempt', 'max_scored_attempts', 'max_points', 'is_active', 'is_enabled', 'is_timed', 'status', 'last_score', 'attempts_left']
 
     def get_status(self, obj):
         user = self.context['request'].user

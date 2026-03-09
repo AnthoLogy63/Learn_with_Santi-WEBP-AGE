@@ -42,7 +42,7 @@ const AdminExamPreview = ({ examId, examName, onClose }: AdminExamPreviewProps) 
     useEffect(() => {
         const fetchQuestions = async () => {
             try {
-                const res = await examService.getQuestions(String(examId));
+                const res = await examService.getAllQuestions(String(examId));
                 if (res.ok) {
                     const data = await res.json();
                     setQuestions(data.questions);

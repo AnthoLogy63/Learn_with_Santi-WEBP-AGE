@@ -1,12 +1,216 @@
 import random
+import openpyxl
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser
+from django.db import transaction
 from django.utils import timezone
 from django.db import models
 from .models import Exam, Question, Option, Attempt, AttemptQuestion, AttemptAnswer
 from .serializers import ExamSerializer, QuestionSerializer, AttemptSerializer, AttemptAnswerSerializer
+
+
+class IsStaff(IsAuthenticated):
+    def has_permission(self, request, view):
+        return super().has_permission(request, view) and request.user.is_staff
+
+
+class ImportExamView(APIView):
+    """
+    Importa un examen completo desde un archivo Excel (.xlsx).
+
+    Formato esperado (hoja única):
+    - Fila 1: encabezados (fijos)
+    - Filas siguientes: una fila por opción de respuesta
+
+    Columnas requeridas:
+        exam_name           | Nombre del examen (mismo valor para todo el examen)
+        exam_description    | Descripción del examen (opcional, solo se lee la 1ª fila)
+        questions_per_attempt | Preguntas por intento (solo fila 1, default 10)
+        max_scored_attempts | Intentos puntuables (solo fila 1, default 3)
+        max_points          | Puntos máximos (solo fila 1, default 100)
+        question_text       | Texto de la pregunta
+        question_type       | single_choice / multiple_choice / open_ended
+        question_points     | Puntos de la pregunta (default 10)
+        time_limit_seconds  | Tiempo límite en segundos (default 60)
+        option_text         | Texto de la opción (vacío si es open_ended)
+        is_correct          | TRUE / FALSE (si esta opción es correcta)
+
+    Lógica de importación:
+    - Si el examen (por nombre exacto) ya existe → se REEMPLAZAN todas sus preguntas
+      (los intentos y resultados anteriores se conservan pero quedarán huérfanos).
+    - Si no existe → se crea un examen nuevo.
+    - El admin recibe un resumen: preguntas creadas, opciones creadas, modo (nuevo/reemplazado).
+    """
+    permission_classes = [IsStaff]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No se proporcionó ningún archivo.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not file_obj.name.endswith('.xlsx'):
+            return Response({'error': 'El archivo debe ser formato .xlsx'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            wb = openpyxl.load_workbook(file_obj)
+            ws = wb.active
+        except Exception:
+            return Response({'error': 'No se pudo leer el archivo Excel.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Leer encabezados
+        header_row = [str(cell.value).strip().lower().replace(' ', '_') if cell.value else '' for cell in ws[1]]
+        required_cols = {'exam_name', 'question_text', 'question_type', 'option_text', 'is_correct'}
+
+        if not required_cols.issubset(set(header_row)):
+            missing = required_cols - set(header_row)
+            return Response(
+                {'error': f'Faltan columnas requeridas: {", ".join(missing)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        col = {name: header_row.index(name) for name in header_row if name}
+
+        def get(row, name, default=''):
+            if name not in col:
+                return default
+            val = row[col[name]]
+            return val if val is not None else default
+
+        def to_bool(val):
+            return str(val).strip().upper() in ('TRUE', '1', 'SI', 'SÍ', 'YES', 'VERDADERO')
+
+        # Leer todas las filas (saltando vacías)
+        rows = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if all(cell is None or str(cell).strip() == '' for cell in row):
+                continue
+            rows.append(row)
+
+        if not rows:
+            return Response({'error': 'El archivo no contiene datos.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Metadatos del examen (de la primera fila)
+        first = rows[0]
+        exam_name = str(get(first, 'exam_name')).strip()
+        if not exam_name:
+            return Response({'error': 'El campo exam_name no puede estar vacío.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        exam_description = str(get(first, 'exam_description', '')).strip()
+        try:
+            questions_per_attempt = int(get(first, 'questions_per_attempt', 10))
+        except (ValueError, TypeError):
+            questions_per_attempt = 10
+        try:
+            max_scored_attempts = int(get(first, 'max_scored_attempts', 3))
+        except (ValueError, TypeError):
+            max_scored_attempts = 3
+        try:
+            max_points = int(get(first, 'max_points', 100))
+        except (ValueError, TypeError):
+            max_points = 100
+
+        # Agrupar filas por pregunta
+        questions_data = []  # [{text, type, points, time, options:[{text, is_correct}]}]
+        current_q = None
+
+        for row in rows:
+            q_text = str(get(row, 'question_text', '')).strip()
+            q_type = str(get(row, 'question_type', 'single_choice')).strip().lower()
+            opt_text = str(get(row, 'option_text', '')).strip()
+            is_correct = to_bool(get(row, 'is_correct', False))
+
+            try:
+                q_points = int(get(row, 'question_points', 10))
+            except (ValueError, TypeError):
+                q_points = 10
+            try:
+                time_limit = int(get(row, 'time_limit_seconds', 60))
+            except (ValueError, TypeError):
+                time_limit = 60
+
+            # Si hay un texto de pregunta y es distinto al actual, creamos una nueva pregunta
+            # Si el texto de pregunta está vacío, asumimos que es una opción de la pregunta actual
+            if q_text and (not current_q or q_text != current_q['text']):
+                current_q = {
+                    'text': q_text,
+                    'type': q_type if q_type in ('single_choice', 'multiple_choice', 'open_ended') else 'single_choice',
+                    'points': q_points,
+                    'time_limit': time_limit,
+                    'options': [],
+                }
+                questions_data.append(current_q)
+
+            # Agregar opción a la pregunta actual (si existe)
+            if current_q and opt_text:
+                current_q['options'].append({'text': opt_text, 'is_correct': is_correct})
+
+        if not questions_data:
+            return Response({'error': 'No se encontraron preguntas en el archivo.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Crear/actualizar en BD
+        errores = []
+        with transaction.atomic():
+            exam, created = Exam.objects.get_or_create(
+                name=exam_name,
+                defaults={
+                    'description': exam_description,
+                    'questions_per_attempt': questions_per_attempt,
+                    'max_scored_attempts': max_scored_attempts,
+                    'max_points': max_points,
+                }
+            )
+
+            if not created:
+                # Actualizar metadatos (no borrar intentos, sí borrar preguntas)
+                exam.description = exam_description or exam.description
+                exam.questions_per_attempt = questions_per_attempt
+                exam.max_scored_attempts = max_scored_attempts
+                exam.max_points = max_points
+                exam.save()
+                # Borrar preguntas anteriores (opciones se borran en cascada)
+                exam.questions.all().delete()
+
+            total_questions = 0
+            total_options = 0
+
+            for q_data in questions_data:
+                try:
+                    question = Question.objects.create(
+                        exam=exam,
+                        text=q_data['text'],
+                        question_type=q_data['type'],
+                        points=q_data['points'],
+                        time_limit_seconds=q_data['time_limit'],
+                    )
+                    total_questions += 1
+
+                    for opt in q_data['options']:
+                        Option.objects.create(
+                            question=question,
+                            text=opt['text'],
+                            is_correct=opt['is_correct'],
+                        )
+                        total_options += 1
+
+                except Exception as e:
+                    errores.append(f"Pregunta '{q_data['text'][:40]}': {str(e)}")
+
+            # Actualiza el banco de preguntas
+            exam.bank_total_questions = total_questions
+            exam.save()
+
+        return Response({
+            'modo': 'creado' if created else 'reemplazado',
+            'exam_id': exam.id,
+            'exam_name': exam.name,
+            'preguntas_creadas': total_questions,
+            'opciones_creadas': total_options,
+            'errores': errores,
+        }, status=status.HTTP_200_OK)
 
 class ExamViewSet(viewsets.ModelViewSet):
     queryset = Exam.objects.all()
@@ -18,7 +222,7 @@ class ExamViewSet(viewsets.ModelViewSet):
             return Exam.objects.all()
         return Exam.objects.filter(is_active=True, is_enabled=True)
     
-    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_enabled(self, request, pk=None):
         if not request.user.is_staff:
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
@@ -189,73 +393,92 @@ class ExamViewSet(viewsets.ModelViewSet):
             'questions': serializer.data
         })
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get'], permission_classes=[IsStaff])
     def stats_summary(self, request):
-        if not request.user.is_staff:
-            return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
-        
+        from django.db.models import Avg, Count, Max, Q, OuterRef, Subquery, IntegerField
         from django.contrib.auth import get_user_model
+        
         UserModel = get_user_model()
         
+        # Get all exams
         exams = Exam.objects.all()
         stats = []
+        
         for exam in exams:
-            # Group by analyst, taking their BEST attempt
-            analysts = UserModel.objects.filter(is_staff=False)
-            best_scores = []
-            for analyst in analysts:
-                best_q_attempt = Attempt.objects.filter(
-                    user=analyst, 
-                    exam=exam, 
-                    status='completed',
-                    counts_for_score=True
-                ).order_by('-score_obtained').first()
-                if best_q_attempt:
-                    best_scores.append(best_q_attempt.score_obtained)
+            # Subquery to find the best score for each analyst for this specific exam
+            best_attempt_sq = Attempt.objects.filter(
+                user=OuterRef('pk'),
+                exam=exam,
+                status='completed',
+                counts_for_score=True
+            ).order_by('-score_obtained').values('score_obtained')[:1]
             
-            total_analysts = len(best_scores)
-            avg_score = sum(best_scores) / total_analysts if total_analysts > 0 else 0
+            # Subquery for the ID of that best attempt (to use for question stats)
+            best_attempt_id_sq = Attempt.objects.filter(
+                user=OuterRef('pk'),
+                exam=exam,
+                status='completed',
+                counts_for_score=True
+            ).order_by('-score_obtained').values('id')[:1]
             
-            # Question stats based on best qualifying attempts
-            questions = Question.objects.filter(exam=exam)
+            # Annotate analysts with their best score for this exam
+            analysts_with_scores = UserModel.objects.filter(is_staff=False).annotate(
+                best_exam_score=Subquery(best_attempt_sq, output_field=IntegerField()),
+                best_attempt_id=Subquery(best_attempt_id_sq, output_field=IntegerField())
+            ).filter(best_exam_score__isnull=False)
+            
+            # Aggregate stats
+            agg = analysts_with_scores.aggregate(
+                total_analysts=Count('id'),
+                avg_score=Avg('best_exam_score')
+            )
+            
+            total_analysts = agg['total_analysts']
+            avg_score = agg['avg_score'] or 0
+            
+            # Get best attempt IDs for question analysis
+            best_attempt_ids = list(analysts_with_scores.values_list('best_attempt_id', flat=True))
+            
+            # Question stats logic
             q_stats = []
-            
-            # Find all "best qualifying attempts" IDs for this exam
-            best_attempt_ids = []
-            for analyst in analysts:
-                at = Attempt.objects.filter(user=analyst, exam=exam, status='completed', counts_for_score=True).order_by('-score_obtained').first()
-                if at: best_attempt_ids.append(at.id)
-
-            for q in questions:
-                relevant_answers = AttemptAnswer.objects.filter(question=q, attempt_id__in=best_attempt_ids)
-                total_q = relevant_answers.count()
-                correct_q = relevant_answers.filter(is_correct=True).count()
+            if best_attempt_ids:
+                questions = Question.objects.filter(exam=exam).prefetch_related('options')
                 
-                # Choice distribution (like Google Forms)
-                choices = []
-                for opt in q.options.all():
-                    # Count how many times this specific option was selected in these best attempts
-                    if q.question_type == 'multiple_choice':
-                        count = relevant_answers.filter(selected_options=opt).count()
-                    else:
-                        count = relevant_answers.filter(selected_option=opt).count()
+                # Batch count answers to avoid N+1
+                all_relevant_answers = AttemptAnswer.objects.filter(
+                    question__exam=exam,
+                    attempt_id__in=best_attempt_ids
+                ).select_related('question')
+                
+                # Pre-calculate distribution
+                for q in questions:
+                    q_answers = [a for a in all_relevant_answers if a.question_id == q.id]
+                    total_q = len(q_answers)
+                    correct_q = len([a for a in q_answers if a.is_correct])
                     
-                    choices.append({
-                        'text': opt.text,
-                        'is_correct': opt.is_correct,
-                        'count': count,
-                        'percent': round((count / total_q * 100) if total_q > 0 else 0)
-                    })
+                    choices = []
+                    for opt in q.options.all():
+                        if q.question_type == 'multiple_choice':
+                            count = AttemptAnswer.objects.filter(id__in=[a.id for a in q_answers], selected_options=opt).count()
+                        else:
+                            count = len([a for a in q_answers if a.selected_option_id == opt.id])
+                        
+                        choices.append({
+                            'text': opt.text,
+                            'is_correct': opt.is_correct,
+                            'count': count,
+                            'percent': round((count / total_q * 100) if total_q > 0 else 0)
+                        })
 
-                q_stats.append({
-                    'id': q.id,
-                    'text': q.text,
-                    'type': q.question_type,
-                    'total': total_q,
-                    'correct': correct_q,
-                    'percent': round((correct_q / total_q * 100) if total_q > 0 else 0),
-                    'choices': choices
-                })
+                    q_stats.append({
+                        'id': q.id,
+                        'text': q.text,
+                        'type': q.question_type,
+                        'total': total_q,
+                        'correct': correct_q,
+                        'percent': round((correct_q / total_q * 100) if total_q > 0 else 0),
+                        'choices': choices
+                    })
 
             stats.append({
                 'id': exam.id,
@@ -266,6 +489,21 @@ class ExamViewSet(viewsets.ModelViewSet):
             })
             
         return Response(stats)
+
+    @action(detail=True, methods=['get'], permission_classes=[IsStaff])
+    def all_questions(self, request, pk=None):
+        """
+        Retorna todas las preguntas y opciones de un examen (para vista previa de administrador).
+        No crea intentos ni limita el número de preguntas.
+        """
+        exam = self.get_object()
+        questions = Question.objects.filter(exam=exam).order_by('id')
+        serializer = QuestionSerializer(questions, many=True)
+        return Response({
+            'exam_name': exam.name,
+            'total_questions': questions.count(),
+            'questions': serializer.data
+        })
 
 class AttemptViewSet(viewsets.ModelViewSet):
     queryset = Attempt.objects.all()
@@ -283,6 +521,7 @@ class AttemptViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Not authorized'}, status=status.HTTP_403_FORBIDDEN)
         
         from django.contrib.auth import get_user_model
+        from django.db.models import Prefetch
         UserModel = get_user_model()
         
         search_query = request.query_params.get('search', '')
@@ -291,20 +530,30 @@ class AttemptViewSet(viewsets.ModelViewSet):
         
         analysts = UserModel.objects.filter(is_staff=False)
         if search_query:
+            # Optimize: use username__icontains but ensure it's indexed
             analysts = analysts.filter(username__icontains=search_query)
             
         total_count = analysts.count()
+        # Optimize: avoid loading all users if not needed
         analysts_page = analysts.order_by('username')[offset:offset+limit]
         
+        # Optimize: Prefetch attempts and their answers to avoid N+1
+        attempts_prefetch = Prefetch(
+            'attempts',
+            queryset=Attempt.objects.filter(status='completed').select_related('exam').prefetch_related(
+                Prefetch('answers', queryset=AttemptAnswer.objects.select_related('question').prefetch_related('selected_options'))
+            ).order_by('-completed_at'),
+            to_attr='completed_attempts'
+        )
+        
+        analysts_with_data = analysts_page.prefetch_related(attempts_prefetch)
+        
         results = []
-        for user in analysts_page:
-            user_attempts = Attempt.objects.filter(user=user, status='completed').order_by('-completed_at')
+        for user in analysts_with_data:
             attempts_data = []
-            
-            for attempt in user_attempts:
-                answers = AttemptAnswer.objects.filter(attempt=attempt)
+            for attempt in user.completed_attempts:
                 ans_data = []
-                for a in answers:
+                for a in attempt.answers.all():
                     selected_text = "N/A"
                     if a.question.question_type == 'multiple_choice':
                         selected_text = ", ".join([o.text for o in a.selected_options.all()])
@@ -434,3 +683,27 @@ class AttemptViewSet(viewsets.ModelViewSet):
             'attempts_left': attempts_left,
             'total_user_score': attempt.user.total_score
         })
+
+class QuestionViewSet(viewsets.ModelViewSet):
+    queryset = Question.objects.all()
+    serializer_class = QuestionSerializer
+    permission_classes = [IsStaff]
+    parser_classes = [MultiPartParser]
+
+    def get_queryset(self):
+        exam_id = self.request.query_params.get('exam_id')
+        if exam_id:
+            return Question.objects.filter(exam_id=exam_id).order_by('id')
+        return Question.objects.all()
+
+class OptionViewSet(viewsets.ModelViewSet):
+    from .serializers import OptionSerializer
+    queryset = Option.objects.all()
+    serializer_class = OptionSerializer
+    permission_classes = [IsStaff]
+
+    def get_queryset(self):
+        question_id = self.request.query_params.get('question_id')
+        if question_id:
+            return Option.objects.filter(question_id=question_id).order_by('id')
+        return Option.objects.all()

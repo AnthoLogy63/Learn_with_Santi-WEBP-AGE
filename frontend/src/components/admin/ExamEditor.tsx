@@ -14,23 +14,55 @@ interface ExamEditorProps {
     onSaveSuccess?: () => void;
 }
 
+interface LocalOption extends Option {
+    isNew?: boolean;
+    isDirty?: boolean;
+    isDeleted?: boolean;
+}
+
+interface LocalQuestion extends Question {
+    options: LocalOption[];
+    isNew?: boolean;
+    isDirty?: boolean;
+    isDeleted?: boolean;
+    tempImageFile?: File;
+    tempImageUrl?: string;
+}
+
 const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
     const [exam, setExam] = useState<Exam | null>(null);
-    const [questions, setQuestions] = useState<Question[]>([]);
+    const [questions, setQuestions] = useState<LocalQuestion[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
     const [showPreview, setShowPreview] = useState(false);
+    const [hasChanges, setHasChanges] = useState(false);
 
     useEffect(() => {
         fetchExamData();
     }, [examId]);
 
+    // Check for changes
+    useEffect(() => {
+        const changed = questions.some(q => q.isDirty || q.isNew || q.isDeleted || q.options.some(o => o.isDirty || o.isNew || o.isDeleted));
+        setHasChanges(changed);
+
+        // Prevent window close if changes exist
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (changed) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [questions]);
+
     const fetchExamData = async () => {
         setLoading(true);
         try {
             const [examRes, questionsRes] = await Promise.all([
-                examService.getExams(), // We filter from list for now or add getExamById
+                examService.getExams(),
                 examService.getAllQuestions(examId)
             ]);
 
@@ -42,7 +74,10 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
 
             if (questionsRes.ok) {
                 const qData = await questionsRes.json();
-                setQuestions(qData.questions);
+                setQuestions(qData.questions.map((q: any) => ({
+                    ...q,
+                    options: q.options.map((o: any) => ({ ...o }))
+                })));
             }
         } catch (error) {
             console.error("Error fetching exam data:", error);
@@ -52,124 +87,139 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
         }
     };
 
-    const handleSaveExam = async () => {
+    const getImageUrl = (q: LocalQuestion) => {
+        if (q.tempImageUrl) return q.tempImageUrl;
+        if (!q.image) return null;
+        if (q.image.startsWith('http')) return q.image;
+        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+        return `${baseUrl}${q.image}`;
+    };
+
+    const handleSaveEverything = async () => {
         if (!exam) return;
         setSaving(true);
         try {
-            const response = await examService.updateExam(exam.id, {
-                name: exam.name,
-                description: exam.description,
-                is_timed: exam.is_timed,
-                questions_per_attempt: exam.questions_per_attempt,
-                max_scored_attempts: exam.max_scored_attempts,
-                max_points: exam.max_points
+            const formData = new FormData();
+
+            // Prepare the full state for JSON serialization
+            // We include everything: exam metadata and questions (with options)
+            const syncData = {
+                ...exam,
+                questions: questions.map(q => ({
+                    ...q,
+                    // Keep the tempImageUrl for local reference if needed, 
+                    // though the backend doesn't need it.
+                    options: q.options
+                }))
+            };
+
+            formData.append('data', JSON.stringify(syncData));
+
+            // Append all new image files with a predictable key
+            questions.forEach(q => {
+                if (q.tempImageFile) {
+                    formData.append(`image_q_${q.id}`, q.tempImageFile);
+                }
             });
 
-            if (response.ok) {
-                toast.success("Examen actualizado correctamente");
+            const res = await examService.syncExam(exam.id, formData);
+
+            if (res.ok) {
+                toast.success("Examen sincronizado correctamente");
+                setHasChanges(false);
+                await fetchExamData(); // Reload to get fresh IDs and clean states
                 onSaveSuccess?.();
             } else {
-                toast.error("Error al actualizar el examen");
+                const errorData = await res.json();
+                toast.error(errorData.error || "Error al sincronizar el examen");
             }
         } catch (error) {
-            toast.error("Error de conexión");
+            console.error("Sync error:", error);
+            toast.error("Error crítico al guardar los cambios");
         } finally {
             setSaving(false);
         }
     };
 
-    const handleAddQuestion = async () => {
-        try {
-            const formData = new FormData();
-            formData.append('exam', examId.toString());
-            formData.append('text', 'Nueva Pregunta');
-            formData.append('question_type', 'single_choice');
-            formData.append('points', '10');
-            formData.append('time_limit_seconds', '60');
-
-            const response = await examService.createQuestion(examId, formData);
-            if (response.ok) {
-                const newQ = await response.json();
-                setQuestions([...questions, { ...newQ, options: [] }]);
-                setExpandedQuestion(newQ.id);
-                toast.success("Pregunta añadida");
-            }
-        } catch (error) {
-            toast.error("Error al añadir pregunta");
-        }
+    const handleAddQuestion = () => {
+        const newQ: LocalQuestion = {
+            id: Math.random(), // Temporary ID
+            text: "Nueva Pregunta",
+            question_type: "single_choice",
+            points: 10,
+            time_limit_seconds: 60,
+            image: null,
+            options: [],
+            isNew: true
+        };
+        setQuestions([...questions, newQ]);
+        setExpandedQuestion(newQ.id);
     };
 
-    const handleDeleteQuestion = async (qId: number) => {
-        if (!confirm("¿Estás seguro de eliminar esta pregunta?")) return;
-        try {
-            const response = await examService.deleteQuestion(qId);
-            if (response.ok) {
-                setQuestions(questions.filter(q => q.id !== qId));
-                toast.success("Pregunta eliminada");
-            }
-        } catch (error) {
-            toast.error("Error al eliminar");
-        }
+    const handleDeleteQuestion = (qId: number) => {
+        setQuestions(questions.map(q => q.id === qId ? { ...q, isDeleted: true } : q));
     };
 
-    const handleUpdateQuestion = async (qId: number, data: Partial<Question>, file?: File) => {
-        try {
-            const formData = new FormData();
-            if (data.text) formData.append('text', data.text);
-            if (data.question_type) formData.append('question_type', data.question_type);
-            if (data.points !== undefined) formData.append('points', data.points.toString());
-            if (data.time_limit_seconds !== undefined) formData.append('time_limit_seconds', data.time_limit_seconds.toString());
-            if (file) formData.append('image', file);
-
-            const response = await examService.updateQuestion(qId, formData);
-            if (response.ok) {
-                const updated = await response.json();
-                setQuestions(questions.map(q => q.id === qId ? { ...q, ...updated } : q));
-                toast.success("Cambios guardados");
+    const handleUpdateQuestion = (qId: number, data: Partial<LocalQuestion>, file?: File) => {
+        setQuestions(questions.map(q => {
+            if (q.id === qId) {
+                const updated = { ...q, ...data, isDirty: true };
+                if (file) {
+                    updated.tempImageFile = file;
+                    updated.tempImageUrl = URL.createObjectURL(file);
+                }
+                return updated;
             }
-        } catch (error) {
-            toast.error("Error al actualizar");
-        }
+            return q;
+        }));
     };
 
-    const handleAddOption = async (qId: number) => {
-        try {
-            const response = await examService.createOption(qId, { text: 'Nueva opción', is_correct: false });
-            if (response.ok) {
-                const newOpt = await response.json();
-                setQuestions(questions.map(q =>
-                    q.id === qId ? { ...q, options: [...q.options, newOpt] } : q
-                ));
+    const handleAddOption = (qId: number) => {
+        setQuestions(questions.map(q => {
+            if (q.id === qId) {
+                const newOpt: LocalOption = {
+                    id: Math.random(),
+                    text: 'Nueva opción',
+                    is_correct: false,
+                    isNew: true
+                };
+                return { ...q, options: [...q.options, newOpt] };
             }
-        } catch (error) {
-            toast.error("Error al añadir opción");
-        }
+            return q;
+        }));
     };
 
-    const handleUpdateOption = async (qId: number, optId: number, data: Partial<Option>) => {
-        try {
-            const response = await examService.updateOption(optId, data);
-            if (response.ok) {
-                const updated = await response.json();
-                setQuestions(questions.map(q =>
-                    q.id === qId ? { ...q, options: q.options.map(o => o.id === optId ? updated : o) } : q
-                ));
+    const handleUpdateOption = (qId: number, optId: number, data: Partial<LocalOption>) => {
+        setQuestions(questions.map(q => {
+            if (q.id === qId) {
+                return {
+                    ...q,
+                    options: q.options.map(o => o.id === optId ? { ...o, ...data, isDirty: true } : o)
+                };
             }
-        } catch (error) {
-            toast.error("Error al actualizar opción");
-        }
+            return q;
+        }));
     };
 
-    const handleDeleteOption = async (qId: number, optId: number) => {
-        try {
-            const response = await examService.deleteOption(optId);
-            if (response.ok) {
-                setQuestions(questions.map(q =>
-                    q.id === qId ? { ...q, options: q.options.filter(o => o.id !== optId) } : q
-                ));
+    const handleDeleteOption = (qId: number, optId: number) => {
+        setQuestions(questions.map(q => {
+            if (q.id === qId) {
+                return {
+                    ...q,
+                    options: q.options.map(o => o.id === optId ? { ...o, isDeleted: true } : o)
+                };
             }
-        } catch (error) {
-            toast.error("Error al eliminar opción");
+            return q;
+        }));
+    };
+
+    const handleClose = () => {
+        if (hasChanges) {
+            if (confirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres salir?")) {
+                onClose();
+            }
+        } else {
+            onClose();
         }
     };
 
@@ -186,12 +236,12 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
             {/* Header Sticky */}
             <div className="sticky top-0 bg-[#001c4d]/90 backdrop-blur-md border-b border-white/10 p-4 md:p-6 z-10 flex justify-between items-center shadow-lg">
                 <div className="flex items-center gap-4">
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
+                    <button onClick={handleClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
                         <X size={24} />
                     </button>
                     <div>
                         <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">Editor de Evaluación</h2>
-                        <p className="text-white/40 text-[10px] uppercase font-black tracking-widest">ID: {examId}</p>
+                        <p className="text-white/40 text-[10px] uppercase font-black tracking-widest">ID: {examId} {hasChanges && <span className="text-amber-400 ml-2">(Cambios sin guardar)</span>}</p>
                     </div>
                 </div>
                 <div className="flex gap-4">
@@ -203,8 +253,8 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                         Vista Previa
                     </button>
                     <button
-                        onClick={handleSaveExam}
-                        disabled={saving}
+                        onClick={handleSaveEverything}
+                        disabled={saving || !hasChanges}
                         className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl transition-all disabled:opacity-50"
                     >
                         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={18} />}
@@ -313,7 +363,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                     </div>
 
                     <div className="space-y-4 pb-20">
-                        {questions.map((q, idx) => (
+                        {questions.filter(q => !q.isDeleted).map((q, idx) => (
                             <div key={q.id} className="bg-white rounded-3xl overflow-hidden shadow-2xl transition-all border border-white/10">
                                 {/* Question Header */}
                                 <div
@@ -353,12 +403,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enunciado de la pregunta</label>
                                                     <textarea
                                                         value={q.text}
-                                                        onChange={(e) => {
-                                                            const newQ = [...questions];
-                                                            newQ[idx].text = e.target.value;
-                                                            setQuestions(newQ);
-                                                        }}
-                                                        onBlur={() => handleUpdateQuestion(q.id, { text: q.text })}
+                                                        onChange={(e) => handleUpdateQuestion(q.id, { text: e.target.value })}
                                                         rows={2}
                                                         className="w-full bg-white border border-slate-200 rounded-2xl py-3 px-4 text-[#001c4d] focus:ring-2 focus:ring-[#001c4d]/20 focus:outline-none font-bold"
                                                     />
@@ -382,12 +427,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                         <input
                                                             type="number"
                                                             value={q.points}
-                                                            onChange={(e) => {
-                                                                const newQ = [...questions];
-                                                                newQ[idx].points = parseInt(e.target.value);
-                                                                setQuestions(newQ);
-                                                            }}
-                                                            onBlur={() => handleUpdateQuestion(q.id, { points: q.points })}
+                                                            onChange={(e) => handleUpdateQuestion(q.id, { points: parseInt(e.target.value) || 0 })}
                                                             className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 text-[#001c4d] text-sm font-bold"
                                                         />
                                                     </div>
@@ -399,12 +439,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                                 type="number"
                                                                 disabled={!exam?.is_timed}
                                                                 value={q.time_limit_seconds}
-                                                                onChange={(e) => {
-                                                                    const newQ = [...questions];
-                                                                    newQ[idx].time_limit_seconds = parseInt(e.target.value);
-                                                                    setQuestions(newQ);
-                                                                }}
-                                                                onBlur={() => handleUpdateQuestion(q.id, { time_limit_seconds: q.time_limit_seconds })}
+                                                                onChange={(e) => handleUpdateQuestion(q.id, { time_limit_seconds: parseInt(e.target.value) || 0 })}
                                                                 className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-9 pr-3 text-[#001c4d] text-sm font-bold disabled:opacity-40"
                                                             />
                                                         </div>
@@ -416,9 +451,9 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                             <div className="md:col-span-4 space-y-2">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Guía Visual (Opcional)</label>
                                                 <div className="relative aspect-video rounded-2xl border-2 border-dashed border-slate-200 bg-white flex flex-col items-center justify-center overflow-hidden group">
-                                                    {q.image ? (
+                                                    {getImageUrl(q) ? (
                                                         <>
-                                                            <img src={q.image} alt="Guia" className="w-full h-full object-cover" />
+                                                            <img src={getImageUrl(q)!} alt="Guia" className="w-full h-full object-cover" />
                                                             <div className="absolute inset-0 bg-[#001c4d]/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <label className="bg-white text-[#001c4d] px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer">Cambiar Foto</label>
                                                             </div>
@@ -469,13 +504,11 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 gap-3">
-                                                    {q.options.map((opt, oIdx) => (
+                                                    {q.options.filter(o => !o.isDeleted).map((opt, oIdx) => (
                                                         <div key={opt.id} className={`group flex items-center gap-3 p-3 rounded-2xl border transition-all ${opt.is_correct ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
                                                             {/* IsCorrect Toggle */}
                                                             <button
                                                                 onClick={() => {
-                                                                    // If single choice, uncheck others. 
-                                                                    // The backend handles this if we implement logic, but for UI:
                                                                     if (q.question_type === 'single_choice' && !opt.is_correct) {
                                                                         q.options.forEach(o => {
                                                                             if (o.is_correct) handleUpdateOption(q.id, o.id, { is_correct: false });
@@ -492,12 +525,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                             <input
                                                                 type="text"
                                                                 value={opt.text}
-                                                                onChange={(e) => {
-                                                                    const newQ = [...questions];
-                                                                    newQ[idx].options[oIdx].text = e.target.value;
-                                                                    setQuestions(newQ);
-                                                                }}
-                                                                onBlur={() => handleUpdateOption(q.id, opt.id, { text: opt.text })}
+                                                                onChange={(e) => handleUpdateOption(q.id, opt.id, { text: e.target.value })}
                                                                 className={`flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold ${opt.is_correct ? 'text-emerald-900' : 'text-[#001c4d]'}`}
                                                             />
 
@@ -510,7 +538,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
                                                             </button>
                                                         </div>
                                                     ))}
-                                                    {q.options.length === 0 && (
+                                                    {q.options.filter(o => !o.isDeleted).length === 0 && (
                                                         <div className="py-6 text-center opacity-40 italic text-xs">Sin opciones registradas.</div>
                                                     )}
                                                 </div>

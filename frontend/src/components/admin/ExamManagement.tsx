@@ -8,6 +8,8 @@ const ExamManagement = () => {
     const [exams, setExams] = useState<Exam[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingExamId, setEditingExamId] = useState<number | null>(null);
+    const [actionLoading, setActionLoading] = useState<Record<number, boolean>>({});
+    const [isCreatingExam, setIsCreatingExam] = useState(false);
 
     const fetchAllExams = async () => {
         try {
@@ -29,6 +31,7 @@ const ExamManagement = () => {
     }, []);
 
     const handleToggle = async (examId: number) => {
+        setActionLoading(prev => ({ ...prev, [examId]: true }));
         try {
             const response = await examService.toggleEnabled(examId);
             if (response.ok) {
@@ -38,10 +41,13 @@ const ExamManagement = () => {
             }
         } catch (error) {
             toast.error("No se pudo cambiar el estado del examen");
+        } finally {
+            setActionLoading(prev => ({ ...prev, [examId]: false }));
         }
     };
 
     const handleCreateExam = async () => {
+        setIsCreatingExam(true);
         try {
             const response = await examService.createExam({
                 name: "Nueva Evaluación",
@@ -50,12 +56,14 @@ const ExamManagement = () => {
             });
             if (response.ok) {
                 const newExam = await response.json();
-                setExams([newExam, ...exams]);
+                setExams(prev => [newExam, ...prev]);
                 setEditingExamId(newExam.id);
                 toast.success("Evaluación creada. Ahora puedes editarla.");
             }
         } catch (error) {
             toast.error("Error al crear evaluación");
+        } finally {
+            setIsCreatingExam(false);
         }
     };
 
@@ -63,16 +71,19 @@ const ExamManagement = () => {
     const handleDeleteExam = async (examId: number) => {
         if (!confirm("¿Estás seguro de que deseas eliminar permanentemente esta evaluación y todas sus preguntas? Esta acción no se puede deshacer.")) return;
 
+        setActionLoading(prev => ({ ...prev, [examId]: true }));
         try {
             const response = await examService.deleteExam(examId);
             if (response.ok) {
-                setExams(exams.filter(e => e.id !== examId));
+                setExams(prev => prev.filter(e => e.id !== examId));
                 toast.success("Evaluación eliminada correctamente");
             } else {
                 toast.error("Error al eliminar la evaluación");
+                setActionLoading(prev => ({ ...prev, [examId]: false }));
             }
         } catch (error) {
             toast.error("Error de conexión");
+            setActionLoading(prev => ({ ...prev, [examId]: false }));
         }
     };
 
@@ -111,10 +122,11 @@ const ExamManagement = () => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={handleCreateExam}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all"
+                            disabled={isCreatingExam}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
                         >
-                            <Plus size={16} />
-                            Nueva Evaluación
+                            {isCreatingExam ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                            {isCreatingExam ? "Creando..." : "Nueva Evaluación"}
                         </button>
                     </div>
                 </header>
@@ -129,10 +141,11 @@ const ExamManagement = () => {
                                     </span>
                                     <button
                                         onClick={() => handleDeleteExam(exam.id)}
-                                        className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                                        disabled={actionLoading[exam.id]}
+                                        className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all disabled:opacity-50"
                                         title="Eliminar Evaluación"
                                     >
-                                        <Trash2 size={18} />
+                                        {actionLoading[exam.id] ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                                     </button>
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-2">{exam.name}</h3>
@@ -156,9 +169,12 @@ const ExamManagement = () => {
                                     <span className="text-[10px] md:text-xs font-bold text-white/40 uppercase tracking-widest">Estado de visibilidad</span>
                                     <button
                                         onClick={() => handleToggle(exam.id)}
-                                        className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#001c4d] ${exam.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                                        disabled={actionLoading[exam.id]}
+                                        className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#001c4d] disabled:opacity-50 ${exam.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
                                     >
-                                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${exam.is_enabled ? 'translate-x-8' : 'translate-x-1'}`} />
+                                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-all flex items-center justify-center ${exam.is_enabled ? 'translate-x-8' : 'translate-x-1'}`}>
+                                            {actionLoading[exam.id] && <Loader2 size={10} className="animate-spin text-slate-400" />}
+                                        </span>
                                     </button>
                                 </div>
                             </div>

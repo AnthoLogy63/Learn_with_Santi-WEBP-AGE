@@ -155,6 +155,14 @@ export const examService = {
             body: form,
         });
     },
+
+    syncExam: async (examId: number, formData: FormData) => {
+        return fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/exams/${examId}/sync/`, {
+            method: 'POST',
+            headers: { ...getAuthHeader() },
+            body: formData,
+        });
+    },
 };
 
 

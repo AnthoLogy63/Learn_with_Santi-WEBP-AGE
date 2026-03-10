@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { examService } from "@/api/examService";
-import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Loader2, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Loader2, Play, X, Maximize2 } from "lucide-react";
 
 interface Option {
   id: number;
@@ -22,6 +22,19 @@ interface Question {
   time_limit_seconds: number;
   question_type: 'single_choice' | 'multiple_choice' | 'open_ended';
 }
+
+const getImageUrl = (imagePath: string | null) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith("http")) return imagePath;
+
+  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const cleanBaseUrl = baseUrl.endsWith("/api") ? baseUrl.slice(0, -4) : baseUrl;
+
+  if (imagePath.startsWith("/media/")) {
+    return `${cleanBaseUrl}${imagePath}`;
+  }
+  return `${cleanBaseUrl}/media/${imagePath}`;
+};
 
 const ExamPage = () => {
   const { examId } = useParams<{ examId: string }>();
@@ -43,6 +56,8 @@ const ExamPage = () => {
   const [streakWrong, setStreakWrong] = useState(0);
   const [activeMeme, setActiveMeme] = useState<{ type: 'happy' | 'sad'; count: number } | null>(null);
   const [isAutoAdvancing, setIsAutoAdvancing] = useState(false);
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
+  const [imageLayout, setImageLayout] = useState<'stack' | 'side'>('stack');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -375,65 +390,103 @@ const ExamPage = () => {
             )}
           </div>
 
-          {currentQuestion.question_type === 'open_ended' ? (
-            <textarea
-              value={answers[currentQuestion.id] || ""}
-              onChange={(e) => handleAnswer(e.target.value)}
-              disabled={feedbackStatus === 'checked' || isAutoAdvancing}
-              placeholder="Escribe tu respuesta aquí..."
-              className={`w-full h-40 p-6 rounded-2xl bg-white/5 border text-white focus:border-amber-400 focus:outline-none transition-all placeholder:text-white/20 font-medium ${feedbackStatus === 'checked' ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/10'
-                }`}
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-              {currentQuestion.options.map((option, index) => {
-                const letter = String.fromCharCode(65 + index);
-                const isSelected = currentQuestion.question_type === 'multiple_choice'
-                  ? (answers[currentQuestion.id] || []).includes(option.id)
-                  : answers[currentQuestion.id] === option.id;
+          <div className={`${currentQuestion.image ? (imageLayout === 'side' ? 'flex flex-col md:flex-row gap-8 items-start' : 'flex flex-col gap-6') : ''}`}>
+            {currentQuestion.image && (
+              <div className={`relative group cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-black/20 self-center md:self-start ${imageLayout === 'side' ? 'w-full md:w-1/2 lg:w-[45%]' : 'w-full max-w-2xl mx-auto'
+                }`}>
+                <img
+                  src={getImageUrl(currentQuestion.image) || ""}
+                  alt="Pregunta"
+                  className="w-full h-auto object-contain max-h-[400px] md:max-h-[500px] transition-transform duration-500 group-hover:scale-105"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth > img.naturalHeight * 1.5) {
+                      setImageLayout('stack');
+                    } else {
+                      setImageLayout('side');
+                    }
+                  }}
+                  onClick={() => setFullScreenImage(getImageUrl(currentQuestion.image))}
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFullScreenImage(getImageUrl(currentQuestion.image));
+                  }}
+                  className="absolute bottom-4 right-4 p-3 rounded-full bg-black/60 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 md:flex items-center justify-center hidden"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </button>
+                {/* Indicador para móviles */}
+                <div className="absolute bottom-2 right-2 md:hidden bg-black/40 backdrop-blur-sm rounded-lg px-2 py-1 flex items-center gap-1">
+                  <Maximize2 className="h-3 w-3 text-white/80" />
+                  <span className="text-[8px] font-black text-white/80 uppercase">Tocar para ampliar</span>
+                </div>
+              </div>
+            )}
 
-                const isMultiple = currentQuestion.question_type === 'multiple_choice';
+            <div className={`${currentQuestion.image && imageLayout === 'side' ? 'flex-1 w-full' : 'w-full'}`}>
+              {currentQuestion.question_type === 'open_ended' ? (
+                <textarea
+                  value={answers[currentQuestion.id] || ""}
+                  onChange={(e) => handleAnswer(e.target.value)}
+                  disabled={feedbackStatus === 'checked' || isAutoAdvancing}
+                  placeholder="Escribe tu respuesta aquí..."
+                  className={`w-full h-40 p-6 rounded-2xl bg-white/5 border text-white focus:border-amber-400 focus:outline-none transition-all placeholder:text-white/20 font-medium ${feedbackStatus === 'checked' ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/10'
+                    }`}
+                />
+              ) : (
+                <div className={`grid gap-4 w-full ${imageLayout === 'side' ? 'grid-cols-1 lg:grid-cols-1' : 'sm:grid-cols-1 md:grid-cols-2'}`}>
+                  {currentQuestion.options.map((option, index) => {
+                    const letter = String.fromCharCode(65 + index);
+                    const isSelected = currentQuestion.question_type === 'multiple_choice'
+                      ? (answers[currentQuestion.id] || []).includes(option.id)
+                      : answers[currentQuestion.id] === option.id;
 
-                let containerStyle = "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-white/20";
-                if (feedbackStatus === 'checked') {
-                  const isCorrectView = option.is_correct || (isOpinionQuest && isSelected);
-                  const isWrongView = isSelected && !option.is_correct && !isOpinionQuest;
+                    const isMultiple = currentQuestion.question_type === 'multiple_choice';
 
-                  if (isCorrectView) {
-                    containerStyle = "border-emerald-500 bg-emerald-500/20 text-white shadow-[0_0_20px_rgba(16,185,129,0.2)]";
-                  } else if (isWrongView) {
-                    containerStyle = "border-red-500 bg-red-500/20 text-white shadow-[0_0_20px_rgba(239,68,68,0.1)]";
-                  } else {
-                    containerStyle = "border-white/5 bg-white/5 text-white/20 opacity-40";
-                  }
-                } else if (isSelected) {
-                  containerStyle = "border-amber-400 bg-amber-400/20 text-white shadow-lg ring-1 ring-amber-400/50";
-                }
+                    let containerStyle = "border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-white/20";
+                    if (feedbackStatus === 'checked') {
+                      const isCorrectView = option.is_correct || (isOpinionQuest && isSelected);
+                      const isWrongView = isSelected && !option.is_correct && !isOpinionQuest;
 
-                return (
-                  <button
-                    key={option.id}
-                    onClick={() => handleAnswer(option.id)}
-                    disabled={feedbackStatus === 'checked'}
-                    className={`group w-full text-left p-6 rounded-2xl border transition-all duration-300 ${containerStyle} ${feedbackStatus === 'checked' ? 'cursor-default' : ''}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`flex-shrink-0 w-8 h-8 flex items-center justify-center text-sm font-black transition-all duration-300 ${isMultiple ? "rounded-lg" : "rounded-full"
-                        } ${isSelected
-                          ? (feedbackStatus === 'checked' && !option.is_correct && !isOpinionQuest ? "bg-red-500 text-white" : "bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.5)]")
-                          : (feedbackStatus === 'checked' && (option.is_correct || (isOpinionQuest && isSelected)) ? "bg-emerald-500 text-white" : "bg-white/10 text-white border border-white/10")
-                        }`}>
-                        {isMultiple ? (isSelected || (feedbackStatus === 'checked' && (option.is_correct || (isOpinionQuest && isSelected))) ? "✓" : "") : letter}
-                      </div>
-                      <span className="text-base font-bold leading-tight group-hover:text-white transition-colors">
-                        {option.text}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+                      if (isCorrectView) {
+                        containerStyle = "border-emerald-500 bg-emerald-500/20 text-white shadow-[0_0_20px_rgba(16,185,129,0.2)]";
+                      } else if (isWrongView) {
+                        containerStyle = "border-red-500 bg-red-500/20 text-white shadow-[0_0_20px_rgba(239,68,68,0.1)]";
+                      } else {
+                        containerStyle = "border-white/5 bg-white/5 text-white/20 opacity-40";
+                      }
+                    } else if (isSelected) {
+                      containerStyle = "border-amber-400 bg-amber-400/20 text-white shadow-lg ring-1 ring-amber-400/50";
+                    }
+
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => handleAnswer(option.id)}
+                        disabled={feedbackStatus === 'checked'}
+                        className={`group w-full text-left p-6 rounded-2xl border transition-all duration-300 ${containerStyle} ${feedbackStatus === 'checked' ? 'cursor-default' : ''}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`flex-shrink-0 w-8 h-8 flex items-center justify-center text-sm font-black transition-all duration-300 ${isMultiple ? "rounded-lg" : "rounded-full"
+                            } ${isSelected
+                              ? (feedbackStatus === 'checked' && !option.is_correct && !isOpinionQuest ? "bg-red-500 text-white" : "bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.5)]")
+                              : (feedbackStatus === 'checked' && (option.is_correct || (isOpinionQuest && isSelected)) ? "bg-emerald-500 text-white" : "bg-white/10 text-white border border-white/10")
+                            }`}>
+                            {isMultiple ? (isSelected || (feedbackStatus === 'checked' && (option.is_correct || (isOpinionQuest && isSelected))) ? "✓" : "") : letter}
+                          </div>
+                          <span className="text-base font-bold leading-tight group-hover:text-white transition-colors">
+                            {option.text}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         <div className="flex items-center justify-center mt-12 border-t border-white/10 pt-8">
@@ -459,6 +512,34 @@ const ExamPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Lightbox / Modal para imagen */}
+      {fullScreenImage && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300"
+          onClick={() => setFullScreenImage(null)}
+        >
+          <button
+            onClick={() => setFullScreenImage(null)}
+            className="absolute top-6 right-6 p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors z-30"
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          <div className="relative w-full h-full flex items-center justify-center p-4">
+            <img
+              src={fullScreenImage}
+              alt="Imagen ampliada"
+              className="max-w-full max-h-full object-contain rounded-xl shadow-2xl animate-in zoom-in duration-300"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/40 text-[10px] font-bold uppercase tracking-widest hidden md:block">
+            Presiona fuera para cerrar
+          </div>
+        </div>
+      )}
     </div>
   );
 };

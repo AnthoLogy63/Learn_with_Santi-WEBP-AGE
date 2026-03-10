@@ -381,12 +381,15 @@ const ImportUsuariosPanel = () => {
             <button
                 onClick={handleImport}
                 disabled={!file || loading}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black text-sm uppercase tracking-widest shadow-lg hover:from-blue-400 hover:to-indigo-500 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black text-sm uppercase tracking-widest shadow-lg hover:from-blue-400 hover:to-indigo-500 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative overflow-hidden"
             >
-                {loading
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Procesando...</>
-                    : <><UploadCloud className="h-4 w-4" /> Importar Usuarios</>
-                }
+                {loading && (
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center backdrop-blur-sm">
+                        <Loader2 className="h-5 w-5 animate-spin text-white" />
+                    </div>
+                )}
+                <UploadCloud className="h-4 w-4" />
+                {loading ? 'Procesando Usuarios...' : 'Importar Usuarios'}
             </button>
 
             {/* ── Resultado ── */}
@@ -408,7 +411,7 @@ const ImportUsuariosPanel = () => {
                         <div className={`rounded-xl p-3 text-center border ${result.errores.length > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/10'}`}>
                             <XCircle className={`h-5 w-5 mx-auto mb-1 ${result.errores.length > 0 ? 'text-red-400' : 'text-white/30'}`} />
                             <p className={`text-2xl font-black ${result.errores.length > 0 ? 'text-red-400' : 'text-white/30'}`}>{result.errores.length}</p>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Errores</p>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Inconsistencias</p>
                         </div>
                     </div>
 
@@ -602,10 +605,15 @@ const ImportExamenPanel = () => {
             <button
                 onClick={handleImport}
                 disabled={!file || loading}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-600 text-white font-black text-sm uppercase tracking-widest shadow-xl hover:scale-[0.98] transition-all disabled:opacity-40 disabled:scale-100 flex items-center justify-center gap-3"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-600 text-white font-black text-sm uppercase tracking-widest shadow-xl hover:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-3 relative overflow-hidden"
             >
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
-                {loading ? 'Procesando archivo...' : 'Importar Evaluación'}
+                {loading && (
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center backdrop-blur-sm">
+                        <Loader2 className="h-6 w-6 animate-spin text-white" />
+                    </div>
+                )}
+                <UploadCloud className="h-5 w-5" />
+                {loading ? 'Procesando Evaluación...' : 'Importar Evaluación'}
             </button>
 
             {/* Resultado */}

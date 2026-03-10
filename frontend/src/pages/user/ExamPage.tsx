@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import { examService } from "@/api/examService";
-import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Loader2, Play, X, Maximize2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, RotateCcw, Loader2, Play, X, Maximize2, Clock } from "lucide-react";
 
 interface Option {
   id: number;
@@ -58,6 +58,13 @@ const ExamPage = () => {
   const [isAutoAdvancing, setIsAutoAdvancing] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [imageLayout, setImageLayout] = useState<'stack' | 'side'>('stack');
+  const [timeLeft, setTimeLeft] = useState<number>(60);
+  const [isTimeOut, setIsTimeOut] = useState(false);
+
+  // Derive current question data
+  const currentQuestion = questions[currentIndex];
+  const isOpinionQuest = currentQuestion && (currentQuestion.question_type === 'single_choice' || currentQuestion.question_type === 'multiple_choice') &&
+    !currentQuestion.options.some(o => o.is_correct);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -99,6 +106,37 @@ const ExamPage = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [showResults, questions.length]);
 
+  // Timer Logic
+  useEffect(() => {
+    if (showResults || !currentQuestion || feedbackStatus !== 'answering' || isAutoAdvancing || activeMeme) return;
+
+    if (timeLeft <= 0) {
+      handleTimeOut();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, showResults, currentQuestion, feedbackStatus, isAutoAdvancing, activeMeme]);
+
+  // Reset timer on question change
+  useEffect(() => {
+    if (currentQuestion) {
+      setTimeLeft(currentQuestion.time_limit_seconds || 60);
+      setIsTimeOut(false);
+    }
+  }, [currentIndex, currentQuestion]);
+
+  const handleTimeOut = () => {
+    if (isAutoAdvancing || feedbackStatus === 'checked') return;
+    setIsTimeOut(true);
+    // When time is out, we force a "Check" with whatever is selected (could be nothing)
+    handleContinue(true);
+  };
+
   const handleExit = () => {
     if (showResults) {
       navigate("/dashboard");
@@ -124,25 +162,7 @@ const ExamPage = () => {
     );
   }
 
-  const currentQuestion = questions[currentIndex];
-  const isOpinionQuest = (currentQuestion.question_type === 'single_choice' || currentQuestion.question_type === 'multiple_choice') &&
-    !currentQuestion.options.some(o => o.is_correct);
-
-  const handleAnswer = (val: any) => {
-    if (feedbackStatus === 'checked' || isAutoAdvancing) return;
-    if (currentQuestion.question_type === 'multiple_choice') {
-      const current = (answers[currentQuestion.id] || []) as number[];
-      if (current.includes(val)) {
-        setAnswers(prev => ({ ...prev, [currentQuestion.id]: current.filter(id => id !== val) }));
-      } else {
-        setAnswers(prev => ({ ...prev, [currentQuestion.id]: [...current, val] }));
-      }
-    } else {
-      setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }));
-    }
-  };
-
-  const handleContinue = () => {
+  const handleContinue = (fromTimeOut = false) => {
     if (isAutoAdvancing) return;
 
     const selected = answers[currentQuestion.id];
@@ -151,7 +171,7 @@ const ExamPage = () => {
       ? (selected || []).length > 0
       : (selected !== undefined && selected !== "");
 
-    if (!hasValue) {
+    if (!hasValue && !fromTimeOut) {
       alert("No puedes pasar a la siguiente pregunta sin antes haber seleccionado alguna opción.");
       return;
     }
@@ -163,7 +183,9 @@ const ExamPage = () => {
     const isOpinionQuest = (currentQuestion.question_type === 'single_choice' || currentQuestion.question_type === 'multiple_choice') &&
       !currentQuestion.options.some(o => o.is_correct);
 
-    if (isOpinionQuest) {
+    if (fromTimeOut && !hasValue) {
+      isCorrect = false;
+    } else if (isOpinionQuest) {
       isCorrect = true;
     } else if (currentQuestion.question_type === 'single_choice') {
       isCorrect = currentQuestion.options.find(o => o.id === selected)?.is_correct || false;
@@ -172,7 +194,7 @@ const ExamPage = () => {
       const correctIds = currentQuestion.options.filter(o => o.is_correct).map(o => o.id);
       isCorrect = selectedIds.length === correctIds.length && selectedIds.every(id => correctIds.includes(id));
     } else if (currentQuestion.question_type === 'open_ended') {
-      isCorrect = (selected as string).trim().length > 0;
+      isCorrect = (selected as string || "").trim().length > 0;
     }
 
     // Update streaks
@@ -197,7 +219,8 @@ const ExamPage = () => {
 
     // Auto-advance after 2 seconds
     setTimeout(() => {
-      if (memeToSet) {
+      // Don't show meme cards if time ran out (punishment is skipping)
+      if (memeToSet && !fromTimeOut) {
         setActiveMeme(memeToSet);
       }
 
@@ -209,6 +232,20 @@ const ExamPage = () => {
         handleFinish();
       }
     }, 2000);
+  };
+
+  const handleAnswer = (val: any) => {
+    if (feedbackStatus === 'checked' || isAutoAdvancing) return;
+    if (currentQuestion.question_type === 'multiple_choice') {
+      const current = (answers[currentQuestion.id] || []) as number[];
+      if (current.includes(val)) {
+        setAnswers(prev => ({ ...prev, [currentQuestion.id]: current.filter(id => id !== val) }));
+      } else {
+        setAnswers(prev => ({ ...prev, [currentQuestion.id]: [...current, val] }));
+      }
+    } else {
+      setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }));
+    }
   };
 
   const handleFinish = async () => {
@@ -348,18 +385,41 @@ const ExamPage = () => {
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
       <header className="border-b border-white/10 bg-white/5 backdrop-blur-xl relative z-10">
-        <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <button onClick={handleExit} className="flex items-center gap-2 text-sm font-bold text-white/60 hover:text-white transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Salir
-          </button>
-          <div className="flex gap-4">
-            <span className="text-sm font-black uppercase tracking-widest text-emerald-400">+{streakCorrect}</span>
-            <span className="text-sm font-black uppercase tracking-widest text-red-500">-{streakWrong}</span>
+        <div className="max-w-4xl mx-auto px-6 h-16 grid grid-cols-3 items-center">
+          {/* Left: Salir */}
+          <div className="flex justify-start">
+            <button onClick={handleExit} className="flex items-center gap-2 text-sm font-bold text-white/60 hover:text-white transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+              Salir
+            </button>
           </div>
-          <span className="text-xs font-bold text-white/40 bg-white/5 px-3 py-1 rounded-full border border-white/10">
-            {currentIndex + 1} / {questions.length}
-          </span>
+
+          {/* Center: Streaks */}
+          <div className="flex justify-center">
+            <div className="flex gap-4 bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
+              <span className="text-sm font-black uppercase tracking-widest text-emerald-400">+{streakCorrect}</span>
+              <span className="text-sm font-black uppercase tracking-widest text-red-500">-{streakWrong}</span>
+            </div>
+          </div>
+
+          {/* Right: Timer and Counter */}
+          <div className="flex justify-end items-center gap-4">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border backdrop-blur-md transition-all duration-500 
+              ${isTimeOut
+                ? 'bg-red-500 text-white border-red-400 scale-150 shadow-[0_0_30px_rgba(239,68,68,0.6)] z-50 animate-bounce'
+                : timeLeft <= 10
+                  ? 'bg-red-500/10 border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                  : 'bg-white/5 border-white/10 text-white/60'
+              } ${!isTimeOut && timeLeft <= 5 ? 'scale-110 animate-pulse' : ''}`}>
+              <Clock className={`h-3.5 w-3.5 ${timeLeft <= 10 && !isTimeOut ? 'animate-spin-slow' : ''}`} />
+              <span className="text-xs font-black tracking-widest tabular-nums">
+                {isTimeOut ? "0:00" : `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`}
+              </span>
+            </div>
+            <span className="hidden sm:inline-flex text-[10px] font-black text-white/30 uppercase tracking-[0.2em] bg-white/5 px-3 py-1 rounded-full border border-white/5">
+              {currentIndex + 1} / {questions.length}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -383,11 +443,13 @@ const ExamPage = () => {
                 {currentQuestion.text}
               </h2>
             </div>
-            {currentQuestion.question_type === 'multiple_choice' && (
-              <span className="flex-shrink-0 px-4 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-400 text-[10px] font-black uppercase tracking-widest">
-                Selección Múltiple
-              </span>
-            )}
+            <div className="flex flex-col items-end gap-2">
+              {currentQuestion.question_type === 'multiple_choice' && (
+                <span className="flex-shrink-0 px-4 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-400 text-[10px] font-black uppercase tracking-widest">
+                  Selección Múltiple
+                </span>
+              )}
+            </div>
           </div>
 
           <div className={`${currentQuestion.image ? (imageLayout === 'side' ? 'flex flex-col md:flex-row gap-8 items-start' : 'flex flex-col gap-6') : ''}`}>
@@ -491,7 +553,7 @@ const ExamPage = () => {
 
         <div className="flex items-center justify-center mt-12 border-t border-white/10 pt-8">
           <button
-            onClick={handleContinue}
+            onClick={() => handleContinue()}
             disabled={isAutoAdvancing}
             className={`w-full max-w-sm py-4 rounded-xl text-lg font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 ${isAutoAdvancing
               ? 'bg-white/10 text-white/40 cursor-wait'

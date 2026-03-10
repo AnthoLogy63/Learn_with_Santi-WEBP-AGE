@@ -7,6 +7,7 @@ import { AppProvider } from "@/context/AppContext";
 import Login from "./pages/auth/Login";
 import Dashboard from "./pages/user/Dashboard";
 import ExamPage from "./pages/user/ExamPage";
+import ShopPage from "./pages/user/ShopPage";
 import NotFound from "./pages/NotFound";
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
@@ -28,6 +29,7 @@ const App = () => (
             {/* Student/User Routes inside UserLayout */}
             <Route element={<UserLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/shop" element={<ShopPage />} />
             </Route>
 
             {/* Admin Routes */}

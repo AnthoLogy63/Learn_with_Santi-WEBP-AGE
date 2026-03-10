@@ -84,6 +84,7 @@ const FORMAT_EXAM_COLUMNS = [
     { col: "question_type", desc: "single_choice / multiple_choice / open_ended", required: true, example: "single_choice" },
     { col: "option_text", desc: "Texto de la respuesta (vacío en open_ended)", required: true, example: "Anti Lavado de Dinero" },
     { col: "is_correct", desc: "Si la opción es válida (TRUE / FALSE)", required: true, example: "TRUE" },
+    { col: "tiempo_segundos", desc: "Tiempo para responder (default 60)", required: false, example: "45" },
     { col: "question_points", desc: "Puntos de esta pregunta (default 10)", required: false, example: "20" },
 ];
 
@@ -567,7 +568,7 @@ const ImportExamenPanel = () => {
                             </table>
                         </div>
                         <div className="text-[10px] text-white/30 italic">
-                            * También puedes incluir: <code>exam_description</code>, <code>questions_per_attempt</code>, <code>max_scored_attempts</code>, <code>max_points</code>, <code>time_limit_seconds</code>.
+                            * También puedes incluir: <code>exam_description</code>, <code>questions_per_attempt</code>, <code>max_scored_attempts</code>, <code>max_points</code>, <code>tiempo_segundos</code>.
                         </div>
                     </div>
                 )}

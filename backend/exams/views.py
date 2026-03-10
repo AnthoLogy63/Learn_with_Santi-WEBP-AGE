@@ -128,7 +128,7 @@ class ImportExamView(APIView):
             except (ValueError, TypeError):
                 q_points = 10
             try:
-                time_limit = int(get(row, 'time_limit_seconds', 60))
+                time_limit = int(get(row, 'tiempo_segundos', get(row, 'time_limit_seconds', 60)))
             except (ValueError, TypeError):
                 time_limit = 60
 
@@ -230,6 +230,117 @@ class ExamViewSet(viewsets.ModelViewSet):
         exam.is_enabled = not exam.is_enabled
         exam.save()
         return Response({'is_enabled': exam.is_enabled})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsStaff])
+    def sync(self, request, pk=None):
+        """
+        Sincroniza el estado completo del examen (metadatos, preguntas y opciones)
+        en una sola transacción. Soporta carga de imágenes.
+        """
+        import json
+        exam = self.get_object()
+        
+        # Extraer datos JSON de FormData
+        data_str = request.data.get('data')
+        if not data_str:
+            return Response({'error': 'No data provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            data = json.loads(data_str)
+        except json.JSONDecodeError:
+            return Response({'error': 'Invalid JSON data'}, status=status.HTTP_400_BAD_REQUEST)
+
+        questions_data = data.get('questions', [])
+        
+        with transaction.atomic():
+            # 1. Sincronizar metadatos del examen
+            exam.name = data.get('name', exam.name)
+            exam.description = data.get('description', exam.description)
+            exam.is_timed = data.get('is_timed', exam.is_timed)
+            exam.questions_per_attempt = data.get('questions_per_attempt', exam.questions_per_attempt)
+            exam.max_scored_attempts = data.get('max_scored_attempts', exam.max_scored_attempts)
+            exam.max_points = data.get('max_points', exam.max_points)
+            exam.save()
+
+            # 2. Sincronizar preguntas
+            processed_question_ids = []
+            
+            for q_data in questions_data:
+                q_id = q_data.get('id')
+                # Si es un ID temporal (decimal/random) o marcado como isNew
+                is_new = q_data.get('isNew') or (isinstance(q_id, float) or (isinstance(q_id, int) and q_id < 0))
+                
+                # Imagen para esta pregunta (si existe en los archivos subidos)
+                q_file_key = f"image_q_{q_id}"
+                q_image_file = request.FILES.get(q_file_key)
+
+                if q_data.get('isDeleted'):
+                    if not is_new:
+                        Question.objects.filter(id=q_id, exam=exam).delete()
+                    continue
+
+                if is_new:
+                    # Crear nueva pregunta
+                    question = Question.objects.create(
+                        exam=exam,
+                        text=q_data.get('text', ''),
+                        question_type=q_data.get('question_type', 'single_choice'),
+                        points=q_data.get('points', 10),
+                        time_limit_seconds=q_data.get('time_limit_seconds', 60)
+                    )
+                    if q_image_file:
+                        question.image = q_image_file
+                        question.save()
+                else:
+                    # Actualizar pregunta existente
+                    question = Question.objects.get(id=q_id, exam=exam)
+                    question.text = q_data.get('text', question.text)
+                    question.question_type = q_data.get('question_type', question.question_type)
+                    question.points = q_data.get('points', question.points)
+                    question.time_limit_seconds = q_data.get('time_limit_seconds', question.time_limit_seconds)
+                    if q_image_file:
+                        question.image = q_image_file
+                    question.save()
+
+                processed_question_ids.append(question.id)
+
+                # 3. Sincronizar opciones para esta pregunta
+                processed_option_ids = []
+                for o_data in q_data.get('options', []):
+                    o_id = o_data.get('id')
+                    is_new_opt = o_data.get('isNew') or (isinstance(o_id, float) or (isinstance(o_id, int) and o_id < 0))
+                    
+                    if o_data.get('isDeleted'):
+                        if not is_new_opt:
+                            Option.objects.filter(id=o_id, question=question).delete()
+                        continue
+                    
+                    if is_new_opt:
+                        option = Option.objects.create(
+                            question=question,
+                            text=o_data.get('text', ''),
+                            is_correct=o_data.get('is_correct', False)
+                        )
+                    else:
+                        option = Option.objects.get(id=o_id, question=question)
+                        option.text = o_data.get('text', option.text)
+                        option.is_correct = o_data.get('is_correct', option.is_correct)
+                        option.save()
+                    
+                    processed_option_ids.append(option.id)
+                
+                # Eliminar opciones de la pregunta que ya no están en los datos (y no son nuevas)
+                # (Esto es un safeguard, aunque ya manejamos isDeleted)
+                # Option.objects.filter(question=question).exclude(id__in=processed_option_ids).delete()
+
+            # Safeguard: Eliminar preguntas del examen que ya no están en el objeto enviado
+            # Question.objects.filter(exam=exam).exclude(id__in=processed_question_ids).delete()
+
+            # Actualizar banco de preguntas
+            exam.bank_total_questions = Question.objects.filter(exam=exam).count()
+            exam.save()
+
+        return Response({'status': 'success', 'processed_questions': len(processed_question_ids)})
 
     @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
     def export_csv(self, request, pk=None):

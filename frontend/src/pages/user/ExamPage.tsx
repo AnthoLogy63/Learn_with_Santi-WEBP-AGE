@@ -27,7 +27,7 @@ const getImageUrl = (imagePath: string | null) => {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
 
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const baseUrl = import.meta.env.VITE_API_URL;
   const cleanBaseUrl = baseUrl.endsWith("/api") ? baseUrl.slice(0, -4) : baseUrl;
 
   if (imagePath.startsWith("/media/")) {

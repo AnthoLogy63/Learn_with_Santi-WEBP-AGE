@@ -91,7 +91,7 @@ const ExamEditor = ({ examId, onClose, onSaveSuccess }: ExamEditorProps) => {
         if (q.tempImageUrl) return q.tempImageUrl;
         if (!q.image) return null;
         if (q.image.startsWith('http')) return q.image;
-        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
+        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '');
         return `${baseUrl}${q.image}`;
     };
 

@@ -1,7 +1,4 @@
-"""
-Django settings for config project - Production-ready with env variables.
-"""
-
+import dj_database_url
 from pathlib import Path
 import os
 
@@ -11,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'learn-with-santi-webp-age.onrender.com']
 
 # Application definition
 INSTALLED_APPS = [
@@ -61,14 +58,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database config changed to local PostgreSQL
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'LearnWithSanti',
-        'USER': 'postgres',
-        'PASSWORD': '913397', 
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
+        conn_max_age=600
+    )
 }
 
 # CORS
@@ -76,6 +69,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:3000',
+    'https://learn-with-santi-webp-age.vercel.app',
 ]
 
 

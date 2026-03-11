@@ -37,8 +37,8 @@ Sustituye la configuración actual de `DATABASES` por una que use la URL de Supa
 import dj_database_url
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL', 'postgresql://postgres:[TU-PASSWORD]@db.scjqnfyziuzhogebsmnx.supabase.co:5432/postgres'),
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
         conn_max_age=600
     )
 }

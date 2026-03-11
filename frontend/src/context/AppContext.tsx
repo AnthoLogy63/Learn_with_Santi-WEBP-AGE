@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { userService, User } from "@/api/userService";
 import { examService, Exam } from "@/api/examService";
+export type { Exam };
 
 export interface ExamResult {
   score: number;

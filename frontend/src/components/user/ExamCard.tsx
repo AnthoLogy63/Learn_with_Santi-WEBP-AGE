@@ -11,10 +11,10 @@ const ExamCard = ({ exam }: ExamCardProps) => {
   const isCompleted = exam.status === "completed";
 
   return (
-    <div className="group bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col justify-between hover:bg-white/25 hover:border-white/20 transition-all duration-300 shadow-2xl animate-fade-in text-white">
+    <div className="group/card bg-white/20 backdrop-blur-xl rounded-2xl border border-white/10 p-6 flex flex-col justify-between hover:bg-white/25 hover:border-white/20 transition-all duration-300 shadow-2xl animate-fade-in text-white">
       <div>
         <div className="flex items-start justify-between mb-5">
-          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform">
+          <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-3xl shadow-inner group-hover/card:scale-110 transition-transform">
             📝
           </div>
           <span

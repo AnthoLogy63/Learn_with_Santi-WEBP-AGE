@@ -15,6 +15,7 @@ export interface User {
     dni: string;
     total_score: number;
     current_rank: Rank | null;
+    profile_image: string | null;
     is_staff: boolean;
     is_active: boolean;
     last_login: string | null;
@@ -68,5 +69,9 @@ export const userService = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ months, delete: deleteUsers }),
         });
+    },
+
+    getRanking: async () => {
+        return apiClient(`/users/ranking/`);
     },
 };

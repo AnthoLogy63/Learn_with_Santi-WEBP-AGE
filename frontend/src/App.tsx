@@ -8,6 +8,7 @@ import Login from "./pages/auth/Login";
 import Dashboard from "./pages/user/Dashboard";
 import ExamPage from "./pages/user/ExamPage";
 import ShopPage from "./pages/user/ShopPage";
+import RankingPage from "./pages/user/RankingPage";
 import NotFound from "./pages/NotFound";
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
@@ -30,6 +31,7 @@ const App = () => (
             <Route element={<UserLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/shop" element={<ShopPage />} />
+              <Route path="/ranking" element={<RankingPage />} />
             </Route>
 
             {/* Admin Routes */}

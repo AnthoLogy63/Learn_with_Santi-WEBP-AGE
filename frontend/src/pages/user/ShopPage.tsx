@@ -2,8 +2,11 @@ import { useState } from "react";
 import { useAppContext } from "@/context/AppContext";
 import { ShoppingBag, Trophy, ArrowLeft, CheckCircle2, Package, Gift, ShoppingCart } from "lucide-react";
 import FondoCaja from "@/media/FondoCaja.webp";
-import SantiWebp from "@/media/santi.webp";
-import LogoCaja from "@/media/logocaja.png";
+import Mochila from "@/media/mochila.webp";
+import PoloResaltadores from "@/media/polos-cartucheras-resaltadores.webp";
+import Agenda_Lapiceros from "@/media/agenda+5 lapiceros.webp";
+import TottebagProduct from "@/media/llavero antiestrés+totebag.webp";
+import GorraMiBonitoTomatodo from "@/media/gorraYtomatodo.webp";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -19,35 +22,43 @@ interface Product {
 const PRODUCTS: Product[] = [
     {
         id: 1,
-        name: "Tomatodo Premium Santi",
-        description: "Para mantenerte hidratado mientras analizas. Acero inoxidable de alta calidad.",
-        price: 500,
-        image: LogoCaja,
-        category: "Accesorios"
+        name: "MOCHILA + LLAVERO MI BONITO",
+        description: "Incluye: 1 mochila + 1 llavero Mi Bonito. Mochila espaciosa y cómoda para uso diario. Colores sujetos a stock. Imagen referencial.",
+        price: 1350,
+        image: Mochila,
+        category: "Productos"
     },
     {
         id: 2,
-        name: "Mochila Tech Pro",
-        description: "Compartimento acolchado para laptop y diseño ergonómico para largas jornadas.",
-        price: 1200,
-        image: SantiWebp,
-        category: "Equipamiento"
+        name: "AGENDA + 5 LAPICEROS DE COLORES",
+        description: "Incluye: 1 agenda + 5 lapiceros de colores. Ideal para organizar tus apuntes y escribir con estilo. Colores sujetos a stock. Imagen referencial.",
+        price: 1250,
+        image: Agenda_Lapiceros,
+        category: "Productos"
     },
     {
         id: 3,
-        name: "Libreta de Apuntes Santi",
-        description: "Donde las mejores ideas de análisis cobran vida. Tapa dura y papel premium.",
-        price: 250,
-        image: LogoCaja,
-        category: "Oficina"
+        name: "POLO + RESALTADORES + CARTUCHERA",
+        description: "Incluye: 1 polo + resaltadores + 1 cartuchera. Kit práctico para estudio o trabajo diario. Colores sujetos a stock. Imagen referencial.",
+        price: 1050,
+        image: PoloResaltadores,
+        category: "Productos"
     },
     {
         id: 4,
-        name: "Gorra 'Analista del Mes'",
-        description: "Estilo y distinción para los mejores de la plataforma.",
-        price: 350,
-        image: SantiWebp,
-        category: "Ropa"
+        name: "TOTTE BAG + LLAVERO MUÑECO ANTIESTRÉS",
+        description: "Incluye: 1 totte bag + 1 llavero muñeco antiestrés. Totte bag espaciosa y práctica para uso diario. Colores sujetos a stock. Imagen referencial.",
+        price: 850,
+        image: TottebagProduct,
+        category: "Productos"
+    },
+    {
+        id: 5,
+        name: "GORRA MI BONITO + TOMATODO",
+        description: "Incluye: 1 gorra Mi Bonito + 1 tomatodo. Accesorios prácticos para el día a día. Colores sujetos a stock. Imagen referencial.",
+        price: 850,
+        image: GorraMiBonitoTomatodo,
+        category: "Productos"
     }
 ];
 
@@ -126,13 +137,6 @@ const ShopPage = () => {
                         <Package className="h-5 w-5 text-[#001c4d]" />
                         Catálogo de Productos
                     </h2>
-                    <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto scrollbar-hide">
-                        {['Todos', 'Accesorios', 'Equipamiento', 'Oficina'].map(cat => (
-                            <button key={cat} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${cat === 'Todos' ? 'bg-[#001c4d] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -141,24 +145,19 @@ const ShopPage = () => {
                             key={product.id}
                             className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col"
                         >
-                            <div className="relative aspect-[4/3] bg-slate-50 flex items-center justify-center overflow-hidden p-6">
+                            <div className="relative aspect-square bg-white flex items-center justify-center overflow-hidden p-2">
                                 <img
                                     src={product.image}
                                     alt={product.name}
                                     className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105"
                                 />
-                                <div className="absolute top-3 left-3">
-                                    <span className="px-2 py-0.5 rounded-lg bg-white/80 backdrop-blur-md border border-slate-100 text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                        {product.category}
-                                    </span>
-                                </div>
                             </div>
 
                             <div className="p-4 flex flex-col flex-1">
-                                <h3 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-[#001c4d] transition-colors line-clamp-1">
+                                <h3 className="text-sm font-bold text-slate-900 mb-1 group-hover:text-[#001c4d] transition-colors">
                                     {product.name}
                                 </h3>
-                                <p className="text-[11px] text-slate-400 mb-4 flex-1 line-clamp-2 leading-relaxed h-8">
+                                <p className="text-[11px] text-slate-400 mb-4 flex-1 leading-relaxed">
                                     {product.description}
                                 </p>
 
@@ -171,8 +170,8 @@ const ShopPage = () => {
                                         onClick={() => handleRedeem(product)}
                                         disabled={redeemingId !== null}
                                         className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${redeemingId === product.id
-                                                ? "bg-emerald-500 text-white cursor-wait"
-                                                : "bg-[#09B3B3] text-white hover:bg-[#079191] active:scale-95 shadow-sm"
+                                            ? "bg-emerald-500 text-white cursor-wait"
+                                            : "bg-[#09B3B3] text-white hover:bg-[#079191] active:scale-95 shadow-sm"
                                             }`}
                                     >
                                         {redeemingId === product.id ? (

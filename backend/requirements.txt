@@ -1,5 +1,6 @@
 asgiref==3.11.1
 attrs==25.4.0
+certifi==2026.2.25
 charset-normalizer==3.4.4
 cloudinary==1.42.1
 dj-database-url==2.3.0
@@ -11,6 +12,7 @@ djangorestframework==3.16.1
 drf-spectacular==0.29.0
 et_xmlfile==2.0.0
 gunicorn==23.0.0
+idna==3.11
 inflection==0.5.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
@@ -22,9 +24,12 @@ python-dotenv==1.2.2
 PyYAML==6.0.3
 referencing==0.37.0
 reportlab==4.4.10
+requests==2.32.5
 rpds-py==0.30.0
+six==1.17.0
 sqlparse==0.5.5
 typing_extensions==4.15.0
 tzdata==2025.3
 uritemplate==4.2.0
+urllib3==2.6.3
 whitenoise==6.9.0

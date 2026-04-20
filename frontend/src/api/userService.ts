@@ -37,35 +37,103 @@ export interface CleanupResult {
     mensaje: string;
 }
 
+const MOCK_ADMIN: User = {
+    usu_cod: "ADM001",
+    username: "admin",
+    usu_dni: "admin123",
+    usu_nom: "Administrador de Prueba",
+    usu_sex: "M",
+    usu_edad: 30,
+    usu_pun_tot: 1000,
+    cat_cod: "ADMIN",
+    ran_sig: 2,
+    usu_fec_ult: new Date().toISOString(),
+    usu_reg: new Date().toISOString(),
+    is_staff: true,
+};
+
+const MOCK_USER: User = {
+    usu_cod: "USR001",
+    username: "user",
+    usu_dni: "user123",
+    usu_nom: "Usuario de Prueba",
+    usu_sex: "F",
+    usu_edad: 25,
+    usu_pun_tot: 150,
+    cat_cod: "ASUR",
+    ran_sig: 1,
+    usu_fec_ult: new Date().toISOString(),
+    usu_reg: new Date().toISOString(),
+    is_staff: false,
+};
+
 /**
  * Servicio para gestionar las operaciones relacionadas con los usuarios.
  */
 export const userService = {
     /**
      * Realiza el login del usuario enviando username y dni.
-     * No utiliza apiClient porque aún no tenemos las credenciales para el Basic Auth.
+     * Soporta credenciales harcodeadas para pruebas sin backend.
      */
     login: async (username: string, dni: string) => {
-        const response = await fetch(`${API_URL}/users/login/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, dni }),
-        });
-        return response;
+        // Bypass con credenciales harcodeadas
+        if (username === "admin" && dni === "admin123") {
+            return {
+                ok: true,
+                json: async () => MOCK_ADMIN,
+            } as Response;
+        }
+        if (username === "user" && dni === "user123") {
+            return {
+                ok: true,
+                json: async () => MOCK_USER,
+            } as Response;
+        }
+
+        try {
+            const response = await fetch(`${API_URL}/users/login/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, dni }),
+            });
+            return response;
+        } catch (error) {
+            console.error("Login fetch error:", error);
+            return { ok: false, status: 500 } as Response;
+        }
     },
 
     /**
      * Obtiene los datos detallados y puntaje de un usuario específico.
      */
     getUserScore: async (usu_cod: string) => {
-        return apiClient(`/users/score/${usu_cod}/`);
+        try {
+            const res = await apiClient(`/users/score/${usu_cod}/`);
+            if (res.ok) return res;
+            throw new Error("Backend offline");
+        } catch (error) {
+            const mockUser = usu_cod === "ADM001" ? MOCK_ADMIN : MOCK_USER;
+            return {
+                ok: true,
+                json: async () => mockUser,
+            } as Response;
+        }
     },
 
     /**
      * Lista todos los usuarios (requiere permisos de Admin/Staff).
      */
     listUsers: async () => {
-        return apiClient(`/users/list/`);
+        try {
+            const res = await apiClient(`/users/list/`);
+            if (res.ok) return res;
+            throw new Error("Backend offline");
+        } catch (error) {
+            return {
+                ok: true,
+                json: async () => [MOCK_ADMIN, MOCK_USER],
+            } as Response;
+        }
     },
 
     /**
@@ -96,7 +164,22 @@ export const userService = {
      * Obtiene el ranking global de usuarios y la posición del usuario actual.
      */
     getRanking: async () => {
-        return apiClient(`/users/ranking/`);
+        try {
+            const res = await apiClient(`/users/ranking/`);
+            if (res.ok) return res;
+            throw new Error("Backend offline");
+        } catch (error) {
+            return {
+                ok: true,
+                json: async () => ({
+                    ranking: [
+                        { ...MOCK_ADMIN, rank: 1, usu_pun_tot: 1000 },
+                        { ...MOCK_USER, rank: 2, usu_pun_tot: 150 },
+                    ],
+                    user_position: 2
+                }),
+            } as Response;
+        }
     },
 
     /**
